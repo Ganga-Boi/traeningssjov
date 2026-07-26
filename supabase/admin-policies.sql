@@ -50,5 +50,5 @@ with check (true);
 revoke all on function public.register_attendance(uuid, text, attendance_type) from public;
 grant execute on function public.register_attendance(uuid, text, attendance_type) to authenticated;
 
-revoke all on function public.register_payment(uuid, numeric, integer, text) from public;
-grant execute on function public.register_payment(uuid, numeric, integer, text) to authenticated;
+revoke all on function public.register_payment(uuid, integer, integer, text) from public;
+grant execute on function public.register_payment(uuid, integer, integer, text) to authenticated;
