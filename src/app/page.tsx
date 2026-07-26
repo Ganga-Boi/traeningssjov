@@ -44,12 +44,6 @@ const DEMO_PEOPLE = [
     payment_status: "ok" as const,
   },
   {
-    name: "Benny Hansen",
-    type: "gæst" as const,
-    balance: null,
-    payment_status: "skal_betale" as const,
-  },
-  {
     name: "Pia Nielsen",
     type: "medlem" as const,
     balance: -1,
@@ -114,8 +108,10 @@ function sortTrainingClasses(items: TrainingClass[]) {
   );
 }
 
-function statusText(person: Person) {
-  if (person.type === "gæst") return "Gæst";
+function statusText(person: Person, trialUsed: boolean, checked: boolean) {
+  if (person.type === "gæst") {
+    return trialUsed && !checked ? "Skal betale" : "Gæst";
+  }
   if ((person.balance ?? 0) <= 0) return "Kredit";
   return `${person.balance} klip`;
 }
@@ -139,9 +135,11 @@ export default function Home() {
   const [trainingSession, setTrainingSession] = useState<TrainingSession | null>(null);
   const [people, setPeople] = useState<Person[]>([]);
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
+  const [guestTrialIds, setGuestTrialIds] = useState<Set<string>>(new Set());
   const [error, setError] = useState("");
   const [addingGuest, setAddingGuest] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [paymentPerson, setPaymentPerson] = useState<Person | null>(null);
 
   const loadClasses = useCallback(async () => {
     const { data, error: classError } = await supabase
@@ -170,7 +168,7 @@ export default function Home() {
   const loadAttendancePage = useCallback(async () => {
     if (!selectedClass) return;
 
-    const [peopleResult, sessionResult] = await Promise.all([
+    const [peopleResult, sessionResult, trialResult] = await Promise.all([
       supabase
         .from("people")
         .select("id,name,type,balance,payment_status,created_at")
@@ -181,6 +179,10 @@ export default function Home() {
         .eq("class_id", selectedClass.id)
         .eq("session_date", sessionDate)
         .maybeSingle(),
+      supabase
+        .from("attendance")
+        .select("person_id")
+        .eq("type", "prøvetime"),
     ]);
 
     if (peopleResult.error) {
@@ -191,6 +193,12 @@ export default function Home() {
 
     if (sessionResult.error) {
       setError(friendlyError(sessionResult.error.message));
+      setPageLoading(false);
+      return;
+    }
+
+    if (trialResult.error) {
+      setError(friendlyError(trialResult.error.message));
       setPageLoading(false);
       return;
     }
@@ -220,6 +228,9 @@ export default function Home() {
     const foundSession = (sessionResult.data ?? null) as TrainingSession | null;
     setPeople(loadedPeople);
     setTrainingSession(foundSession);
+    setGuestTrialIds(
+      new Set(((trialResult.data ?? []) as Attendance[]).map((row) => row.person_id)),
+    );
 
     if (!foundSession) {
       setCheckedIds(new Set());
@@ -301,6 +312,15 @@ export default function Home() {
   async function toggleAttendance(person: Person) {
     if (savingId || trainingSession?.status === "aflyst") return;
 
+    if (
+      person.type === "gæst" &&
+      guestTrialIds.has(person.id) &&
+      !checkedIds.has(person.id)
+    ) {
+      setPaymentPerson(person);
+      return;
+    }
+
     setSavingId(person.id);
     setError("");
 
@@ -353,6 +373,48 @@ export default function Home() {
     }
 
     await loadAttendancePage();
+  }
+
+  async function payAndRegisterGuest(person: Person) {
+    setSavingId(person.id);
+    setError("");
+
+    const activeSession = await ensureTrainingSession();
+    if (!activeSession) {
+      setSavingId(null);
+      return "Træningsgangen kunne ikke oprettes.";
+    }
+
+    const { error: paymentError } = await supabase.rpc("register_payment", {
+      p_person_id: person.id,
+      p_amount_ore: 37500,
+      p_clips: 10,
+      p_note: "10 klip efter gratis prøvetime",
+    });
+
+    if (paymentError) {
+      setSavingId(null);
+      return friendlyError(paymentError.message);
+    }
+
+    const { error: attendanceError } = await supabase.rpc(
+      "register_attendance_for_session",
+      {
+        p_person_id: person.id,
+        p_session_id: activeSession.id,
+        p_type: "normal",
+      },
+    );
+
+    setSavingId(null);
+
+    if (attendanceError) {
+      await loadAttendancePage();
+      return `Betalingen er gemt, men fremmødet fejlede: ${friendlyError(attendanceError.message)}`;
+    }
+
+    await loadAttendancePage();
+    return null;
   }
 
   async function addGuest(name: string) {
@@ -454,6 +516,7 @@ export default function Home() {
               {sortedPeople.map((person) => {
                 const checked = checkedIds.has(person.id);
                 const saving = savingId === person.id;
+                const trialUsed = guestTrialIds.has(person.id);
 
                 return (
                   <button
@@ -482,7 +545,7 @@ export default function Home() {
                     </span>
 
                     <span className="whitespace-nowrap text-sm font-bold text-[#526960] sm:text-base">
-                      {saving ? "…" : statusText(person)}
+                      {saving ? "…" : statusText(person, trialUsed, checked)}
                     </span>
                   </button>
                 );
@@ -496,6 +559,14 @@ export default function Home() {
         <AddGuest
           onClose={() => setAddingGuest(false)}
           onSave={addGuest}
+        />
+      )}
+
+      {paymentPerson && (
+        <GuestPayment
+          person={paymentPerson}
+          onClose={() => setPaymentPerson(null)}
+          onConfirm={payAndRegisterGuest}
         />
       )}
     </main>
@@ -567,6 +638,68 @@ function AddGuest({
           {busy ? "Gemmer…" : "Tilføj"}
         </button>
       </form>
+    </div>
+  );
+}
+
+function GuestPayment({
+  person,
+  onClose,
+  onConfirm,
+}: {
+  person: Person;
+  onClose: () => void;
+  onConfirm: (person: Person) => Promise<string | null>;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function confirmPayment() {
+    setBusy(true);
+    setError("");
+    const paymentError = await onConfirm(person);
+    setBusy(false);
+
+    if (paymentError) {
+      setError(paymentError);
+      return;
+    }
+
+    onClose();
+  }
+
+  return (
+    <div className="fixed inset-0 z-20 flex items-end bg-black/35 p-3 sm:items-center sm:justify-center">
+      <div className="w-full rounded-2xl bg-white p-5 text-[#18322b] shadow-xl sm:max-w-sm">
+        <div className="flex items-center justify-between gap-4">
+          <h2 className="text-xl font-black">Skal betale 375 kr.</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={busy}
+            aria-label="Luk"
+            className="h-11 w-11 rounded-xl text-3xl text-[#60756d]"
+          >
+            ×
+          </button>
+        </div>
+
+        <p className="mt-3 text-base font-bold">{person.name}</p>
+        <p className="mt-1 text-sm text-[#60756d]">
+          Prøvetimen er brugt. Betaling giver 10 klip, og dagens træning bruger ét.
+        </p>
+
+        {error && <p className="mt-3 text-sm font-semibold text-[#8d342d]">{error}</p>}
+
+        <button
+          type="button"
+          onClick={confirmPayment}
+          disabled={busy}
+          className="mt-4 min-h-14 w-full rounded-xl bg-[#28755d] px-4 font-black text-white disabled:opacity-40"
+        >
+          {busy ? "Gemmer…" : "Registrér 375 kr."}
+        </button>
+      </div>
     </div>
   );
 }
