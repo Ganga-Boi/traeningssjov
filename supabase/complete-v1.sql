@@ -333,3 +333,6 @@ where not exists (
 );
 
 commit;
+
+-- Sørg for, at nye RPC-funktioner straks bliver synlige for appen.
+notify pgrst, 'reload schema';
