@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export default function PrivacyPage() {
   return (
     <main className="min-h-screen bg-[#f4f5f1] px-5 py-10 text-[#18322b]">
@@ -18,11 +20,14 @@ export default function PrivacyPage() {
           <p>
             Der registreres ikke CPR-nummer, helbredsoplysninger eller andre unødvendige personoplysninger.
           </p>
+          <p className="rounded-2xl bg-[#fff2d7] p-4 font-semibold text-[#80580c]">
+            Denne testversion er uden login og må derfor kun bruges med fiktive navne. Rigtige deltageroplysninger kræver adgangsbeskyttelse.
+          </p>
         </div>
 
-        <a href="/" className="mt-8 inline-flex rounded-xl bg-[#18322b] px-4 py-3 font-bold text-white">
+        <Link href="/" className="mt-8 inline-flex rounded-xl bg-[#18322b] px-4 py-3 font-bold text-white">
           Tilbage
-        </a>
+        </Link>
       </article>
     </main>
   );
