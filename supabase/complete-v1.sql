@@ -277,7 +277,17 @@ grant execute on function public.register_payment(uuid, integer, integer, text) 
 grant execute on function public.undo_attendance_for_session(uuid, uuid) to anon;
 grant execute on function public.reverse_payment(uuid, text) to anon;
 
--- Fiktive deltagere til v1-test. Eksisterende navne oprettes ikke igen.
+-- Fjern gæster, der tidligere blev oprettet automatisk som testdata.
+-- Rigtige gæster skal kun komme fra "+ Gæst" i appen.
+delete from public.people
+where type = 'gæst'::public.person_type
+  and lower(name) in (
+    lower('Benny Hansen'),
+    lower('Peter Hansen'),
+    lower('Sofie (gæst)')
+  );
+
+-- Fiktive medlemmer til v1-test. Eksisterende navne oprettes ikke igen.
 insert into public.people(
   name,
   type,
@@ -311,25 +321,6 @@ where not exists (
   select 1
   from public.people existing
   where lower(existing.name) = lower(demo.name)
-);
-
-insert into public.people(
-  name,
-  type,
-  balance,
-  payment_status,
-  privacy_notice_given_at
-)
-select
-  'Sofie (gæst)',
-  'gæst'::public.person_type,
-  null,
-  'skal_betale'::public.payment_status,
-  now()
-where not exists (
-  select 1
-  from public.people
-  where lower(name) = lower('Sofie (gæst)')
 );
 
 commit;
