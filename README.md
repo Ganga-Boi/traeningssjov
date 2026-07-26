@@ -10,6 +10,8 @@ Mobil webapp til fremmøde, 10-klippekort og manuel registrering af MobilePay-be
 - Den fremmødte nedtones, men den nye saldo er stadig synlig.
 - Fejlregistreret fremmøde kan fortrydes, så klippet sættes tilbage.
 - En gæst kan oprettes direkte fra fremmødelisten.
+- Gæstens første fremmøde er en gratis prøvetime.
+- På næste træningsgang står gæsten som `Skal betale`.
 - En godkendt betaling på 375 kr. gør gæsten til medlem og tilføjer 10 klip.
 - En ny dato eller et andet hold får en ny fremmødeliste, mens deltagere og saldo følger med.
 
