@@ -1,6 +1,5 @@
 "use client";
 
-import type { Session } from "@supabase/supabase-js";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -38,9 +37,8 @@ function localDateValue(date: Date) {
 function nearestDateForWeekday(weekday: number) {
   const today = new Date();
   const current = today.getDay() === 0 ? 7 : today.getDay();
-  const difference = weekday - current;
   const result = new Date(today);
-  result.setDate(today.getDate() + difference);
+  result.setDate(today.getDate() + weekday - current);
   return localDateValue(result);
 }
 
@@ -58,7 +56,6 @@ function displayDate(value: string) {
 }
 
 export default function Home() {
-  const [authSession, setAuthSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [classes, setClasses] = useState<TrainingClass[]>([]);
   const [selectedClass, setSelectedClass] = useState<TrainingClass | null>(null);
@@ -71,25 +68,12 @@ export default function Home() {
   const [savingId, setSavingId] = useState<string | null>(null);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setAuthSession(data.session);
-      setLoading(false);
-    });
-
-    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      setAuthSession(nextSession);
-    });
-
-    return () => data.subscription.unsubscribe();
+    void loadClasses();
   }, []);
 
   useEffect(() => {
-    if (authSession) void loadClasses();
-  }, [authSession]);
-
-  useEffect(() => {
-    if (authSession && selectedClass) void loadAttendancePage();
-  }, [authSession, selectedClass, sessionDate]);
+    if (selectedClass) void loadAttendancePage();
+  }, [selectedClass, sessionDate]);
 
   async function loadClasses() {
     setError("");
@@ -99,12 +83,9 @@ export default function Home() {
       .eq("active", true)
       .order("sort_order");
 
-    if (classError) {
-      setError(classError.message);
-      return;
-    }
-
-    setClasses((data ?? []) as TrainingClass[]);
+    if (classError) setError(classError.message);
+    else setClasses((data ?? []) as TrainingClass[]);
+    setLoading(false);
   }
 
   async function loadAttendancePage() {
@@ -124,34 +105,21 @@ export default function Home() {
         .maybeSingle(),
     ]);
 
-    if (peopleResult.error) {
-      setError(peopleResult.error.message);
-      return;
-    }
-    if (sessionResult.error) {
-      setError(sessionResult.error.message);
-      return;
-    }
+    if (peopleResult.error) return setError(peopleResult.error.message);
+    if (sessionResult.error) return setError(sessionResult.error.message);
 
     const foundSession = (sessionResult.data ?? null) as TrainingSession | null;
     setTrainingSession(foundSession);
     setPeople((peopleResult.data ?? []) as Person[]);
 
-    if (!foundSession) {
-      setCheckedIds(new Set());
-      return;
-    }
+    if (!foundSession) return setCheckedIds(new Set());
 
     const attendanceResult = await supabase
       .from("attendance")
       .select("person_id")
       .eq("session_id", foundSession.id);
 
-    if (attendanceResult.error) {
-      setError(attendanceResult.error.message);
-      return;
-    }
-
+    if (attendanceResult.error) return setError(attendanceResult.error.message);
     setCheckedIds(new Set(((attendanceResult.data ?? []) as Attendance[]).map((row) => row.person_id)));
   }
 
@@ -205,10 +173,7 @@ export default function Home() {
     setError("");
 
     const activeSession = await ensureTrainingSession();
-    if (!activeSession) {
-      setSavingId(null);
-      return;
-    }
+    if (!activeSession) return setSavingId(null);
 
     const attendanceType =
       person.type === "gæst" ? "prøvetime" : (person.balance ?? 0) > 0 ? "normal" : "kredit";
@@ -224,28 +189,18 @@ export default function Home() {
       setError(rpcError.message.includes("duplicate") ? `${person.name} er allerede krydset af.` : rpcError.message);
       return;
     }
-
     await loadAttendancePage();
   }
 
   if (loading) return <LoadingScreen />;
-  if (!authSession) return <Login />;
 
   if (!selectedClass) {
     return (
       <main className="min-h-screen bg-[#f3f5f0] px-4 py-7 text-[#17342b]">
         <div className="mx-auto max-w-xl">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-[11px] font-extrabold uppercase tracking-[0.24em] text-[#6b837a]">Træningssjov</p>
-              <h1 className="mt-1 text-3xl font-black">Vælg hold</h1>
-              <p className="mt-2 text-[#6b837a]">Tryk på det hold, du vil registrere fremmøde på.</p>
-            </div>
-            <button onClick={() => supabase.auth.signOut()} className="rounded-xl px-3 py-2 text-sm font-bold text-[#587067]">Log ud</button>
-          </div>
-
+          <p className="text-[11px] font-extrabold uppercase tracking-[0.24em] text-[#6b837a]">Træningssjov</p>
+          <h1 className="mt-1 text-3xl font-black">Vælg hold</h1>
           {error && <ErrorBox message={error} />}
-
           <div className="mt-6 space-y-3">
             {classes.map((item) => (
               <button
@@ -270,10 +225,7 @@ export default function Home() {
     <main className="min-h-screen bg-[#f3f5f0] text-[#17342b]">
       <header className="sticky top-0 z-10 border-b border-[#dce2da] bg-white/95 backdrop-blur">
         <div className="mx-auto max-w-xl px-4 py-3">
-          <div className="flex items-center justify-between">
-            <button onClick={() => setSelectedClass(null)} className="rounded-xl py-2 pr-3 text-sm font-extrabold text-[#28755d]">‹ Hold</button>
-            <button onClick={() => supabase.auth.signOut()} className="rounded-xl px-3 py-2 text-sm font-bold text-[#587067]">Log ud</button>
-          </div>
+          <button onClick={() => setSelectedClass(null)} className="rounded-xl py-2 pr-3 text-sm font-extrabold text-[#28755d]">‹ Hold</button>
           <div className="mt-1 flex items-end justify-between gap-3">
             <div>
               <p className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-[#6b837a]">{selectedClass.name}</p>
@@ -297,7 +249,6 @@ export default function Home() {
         </section>
 
         {error && <ErrorBox message={error} />}
-        {trainingSession?.status === "aflyst" && <ErrorBox message="Denne træning er markeret som aflyst." />}
 
         <section className="mt-4 overflow-hidden rounded-3xl border border-[#dce2da] bg-white shadow-sm">
           <div className="flex items-center justify-between border-b border-[#e8ece7] px-4 py-4">
@@ -318,12 +269,12 @@ export default function Home() {
                   <button
                     key={person.id}
                     onClick={() => checkIn(person)}
-                    disabled={checked || savingId === person.id || trainingSession?.status === "aflyst"}
+                    disabled={checked || savingId === person.id}
                     className="flex min-h-20 w-full items-center gap-4 px-4 py-3 text-left disabled:cursor-default"
                   >
                     <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full border-2 text-xl font-black ${checked ? "border-[#28755d] bg-[#28755d] text-white" : "border-[#bdc9c2] bg-white text-transparent"}`}>✓</span>
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-lg font-black">{person.name}</span>
+                      <span className="block truncate text-lg font-extrabold">{person.name}</span>
                       <span className="mt-0.5 block text-sm text-[#6b837a]">
                         {checked ? "Mødt op" : person.type === "gæst" ? "Gæst" : `${person.balance} klip tilbage`}
                       </span>
@@ -335,41 +286,9 @@ export default function Home() {
             </div>
           )}
         </section>
-
-        <a href="/privatliv" className="mt-5 block text-center text-sm font-semibold text-[#6b837a] underline underline-offset-4">Sådan behandler vi personoplysninger</a>
       </div>
 
       {addingPerson && <AddPerson onClose={() => setAddingPerson(false)} onCreated={loadAttendancePage} />}
-    </main>
-  );
-}
-
-function Login() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [message, setMessage] = useState("");
-  const [busy, setBusy] = useState(false);
-
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    setBusy(true);
-    setMessage("");
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    setBusy(false);
-    if (error) setMessage("E-mail eller adgangskode er forkert.");
-  }
-
-  return (
-    <main className="flex min-h-screen items-center justify-center bg-[#f3f5f0] p-5 text-[#17342b]">
-      <form onSubmit={submit} className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-sm">
-        <p className="text-xs font-extrabold uppercase tracking-[0.24em] text-[#6b837a]">Træningssjov</p>
-        <h1 className="mt-2 text-3xl font-black">Log ind</h1>
-        <p className="mt-2 text-[#6b837a]">Kun for den, der administrerer fremmødet.</p>
-        <input required type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="E-mail" className="mt-6 w-full rounded-2xl border border-[#ccd6d0] px-4 py-4 text-base outline-none focus:border-[#28755d]" />
-        <input required type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Adgangskode" className="mt-3 w-full rounded-2xl border border-[#ccd6d0] px-4 py-4 text-base outline-none focus:border-[#28755d]" />
-        {message && <p className="mt-3 text-sm font-semibold text-[#9a3b32]">{message}</p>}
-        <button disabled={busy} className="mt-5 w-full rounded-2xl bg-[#17342b] px-4 py-4 text-base font-extrabold text-white disabled:opacity-60">{busy ? "Logger ind…" : "Log ind"}</button>
-      </form>
     </main>
   );
 }
@@ -392,10 +311,7 @@ function AddPerson({ onClose, onCreated }: { onClose: () => void; onCreated: () 
       privacy_notice_given_at: new Date().toISOString(),
     });
     setBusy(false);
-    if (insertError) {
-      setError(insertError.message);
-      return;
-    }
+    if (insertError) return setError(insertError.message);
     await onCreated();
     onClose();
   }
@@ -413,7 +329,9 @@ function AddPerson({ onClose, onCreated }: { onClose: () => void; onCreated: () 
           <span>Personen er informeret om, at navn og fremmøde gemmes for at administrere holdet.</span>
         </label>
         {error && <p className="mt-3 text-sm font-semibold text-[#9a3b32]">{error}</p>}
-        <button disabled={!informed || busy} className="mt-4 w-full rounded-2xl bg-[#28755d] px-4 py-4 font-extrabold text-white disabled:opacity-40">{busy ? "Gemmer…" : "Gem deltager"}</button>
+        <button disabled={!informed || busy} className="mt-4 w-full rounded-2xl bg-[#28755d] px-4 py-4 font-extrabold text-white disabled:opacity-40">
+          {busy ? "Gemmer…" : "Gem deltager"}
+        </button>
       </form>
     </div>
   );
