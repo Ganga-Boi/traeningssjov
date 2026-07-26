@@ -27,6 +27,8 @@ type TrainingSession = {
 };
 
 type Attendance = { person_id: string };
+type TrialAttendance = { person_id: string; session_id: string | null };
+type TrialSession = { id: string; session_date: string };
 
 const supabase = getSupabaseBrowserClient();
 
@@ -39,33 +41,63 @@ const LEGACY_DEMO_GUEST_CUTOFF = new Date("2026-07-26T18:00:00Z").getTime();
 
 const DEMO_PEOPLE = [
   {
-    name: "Allan Maharaj",
-    type: "medlem" as const,
-    balance: 7,
-    payment_status: "ok" as const,
-  },
-  {
-    name: "Camilla Friis",
-    type: "medlem" as const,
-    balance: 4,
-    payment_status: "ok" as const,
-  },
-  {
-    name: "Pia Nielsen",
-    type: "medlem" as const,
-    balance: -1,
-    payment_status: "blokeret" as const,
-  },
-  {
     name: "Anna Madsen",
     type: "medlem" as const,
     balance: 8,
     payment_status: "ok" as const,
   },
   {
+    name: "Birgit Holm",
+    type: "medlem" as const,
+    balance: 5,
+    payment_status: "ok" as const,
+  },
+  {
+    name: "Camilla Friis",
+    type: "medlem" as const,
+    balance: 2,
+    payment_status: "ok" as const,
+  },
+  {
     name: "Dorte Larsen",
     type: "medlem" as const,
     balance: 10,
+    payment_status: "ok" as const,
+  },
+  {
+    name: "Eva Nielsen",
+    type: "medlem" as const,
+    balance: 0,
+    payment_status: "skal_betale" as const,
+  },
+  {
+    name: "Freja Bach",
+    type: "medlem" as const,
+    balance: 7,
+    payment_status: "ok" as const,
+  },
+  {
+    name: "Helle Møller",
+    type: "medlem" as const,
+    balance: 4,
+    payment_status: "ok" as const,
+  },
+  {
+    name: "Ida Thomsen",
+    type: "medlem" as const,
+    balance: 9,
+    payment_status: "ok" as const,
+  },
+  {
+    name: "Karen Sørensen",
+    type: "medlem" as const,
+    balance: 6,
+    payment_status: "ok" as const,
+  },
+  {
+    name: "Lene Andersen",
+    type: "medlem" as const,
+    balance: 3,
     payment_status: "ok" as const,
   },
 ];
@@ -123,9 +155,23 @@ function isLegacyDemoGuest(person: Person) {
   );
 }
 
-function statusText(person: Person, trialUsed: boolean, checked: boolean) {
+function guestNeedsPayment(
+  person: Person,
+  trialDate: string | undefined,
+  sessionDate: string,
+) {
+  return person.type === "gæst" && Boolean(trialDate && sessionDate > trialDate);
+}
+
+function statusText(
+  person: Person,
+  trialDate: string | undefined,
+  sessionDate: string,
+) {
   if (person.type === "gæst") {
-    return trialUsed && !checked ? "Skal betale" : "Gæst";
+    return guestNeedsPayment(person, trialDate, sessionDate)
+      ? "Skal betale"
+      : "Gæst";
   }
   if ((person.balance ?? 0) <= 0) return "Kredit";
   return `${person.balance} klip`;
@@ -137,6 +183,9 @@ function friendlyError(message: string) {
   }
   if (/failed to fetch|network/i.test(message)) {
     return "Forbindelsen til databasen fejlede. Prøv igen.";
+  }
+  if (/register_payment|remove_unpaid_guest|schema cache|could not find the function/i.test(message)) {
+    return "Handlingen kunne ikke gemmes. Databasen mangler den nyeste opdatering.";
   }
   return message;
 }
@@ -150,7 +199,7 @@ export default function Home() {
   const [trainingSession, setTrainingSession] = useState<TrainingSession | null>(null);
   const [people, setPeople] = useState<Person[]>([]);
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
-  const [guestTrialIds, setGuestTrialIds] = useState<Set<string>>(new Set());
+  const [guestTrialDates, setGuestTrialDates] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
   const [addingGuest, setAddingGuest] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -196,7 +245,7 @@ export default function Home() {
         .maybeSingle(),
       supabase
         .from("attendance")
-        .select("person_id")
+        .select("person_id,session_id")
         .eq("type", "prøvetime"),
     ]);
 
@@ -243,11 +292,51 @@ export default function Home() {
     }
 
     const foundSession = (sessionResult.data ?? null) as TrainingSession | null;
+    const trialRows = (trialResult.data ?? []) as TrialAttendance[];
+    const trialSessionIds = [
+      ...new Set(
+        trialRows
+          .map((row) => row.session_id)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ];
+    let trialSessions: TrialSession[] = [];
+
+    if (trialSessionIds.length > 0) {
+      const { data, error: trialSessionError } = await supabase
+        .from("sessions")
+        .select("id,session_date")
+        .in("id", trialSessionIds);
+
+      if (trialSessionError) {
+        setError(friendlyError(trialSessionError.message));
+        setPageLoading(false);
+        return;
+      }
+
+      trialSessions = (data ?? []) as TrialSession[];
+    }
+
+    const sessionDatesById = new Map(
+      trialSessions.map((session) => [session.id, session.session_date]),
+    );
+    const nextTrialDates: Record<string, string> = {};
+
+    for (const row of trialRows) {
+      if (!row.session_id) continue;
+      const trialDate = sessionDatesById.get(row.session_id);
+      if (
+        trialDate &&
+        (!nextTrialDates[row.person_id] ||
+          trialDate < nextTrialDates[row.person_id])
+      ) {
+        nextTrialDates[row.person_id] = trialDate;
+      }
+    }
+
     setPeople(loadedPeople);
     setTrainingSession(foundSession);
-    setGuestTrialIds(
-      new Set(((trialResult.data ?? []) as Attendance[]).map((row) => row.person_id)),
-    );
+    setGuestTrialDates(nextTrialDates);
 
     if (!foundSession) {
       setCheckedIds(new Set());
@@ -322,28 +411,26 @@ export default function Home() {
   }
 
   const sortedPeople = useMemo(() => {
-    function needsGuestPayment(person: Person) {
-      return (
-        person.type === "gæst" &&
-        guestTrialIds.has(person.id) &&
-        !checkedIds.has(person.id)
-      );
-    }
-
-    return [...people].sort(
-      (a, b) =>
-        Number(needsGuestPayment(b)) - Number(needsGuestPayment(a)) ||
-        a.name.localeCompare(b.name, "da"),
-    );
-  }, [people, guestTrialIds, checkedIds]);
+    return [...people].sort((a, b) => {
+      if (a.type !== b.type) return a.type === "gæst" ? -1 : 1;
+      if (a.type === "gæst" && b.type === "gæst") {
+        return (
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+      }
+      return a.name.localeCompare(b.name, "da");
+    });
+  }, [people]);
 
   async function toggleAttendance(person: Person) {
     if (savingId || trainingSession?.status === "aflyst") return;
 
     if (
-      person.type === "gæst" &&
-      guestTrialIds.has(person.id) &&
-      !checkedIds.has(person.id)
+      guestNeedsPayment(
+        person,
+        guestTrialDates[person.id],
+        sessionDate,
+      )
     ) {
       setPaymentPerson(person);
       return;
@@ -403,15 +490,9 @@ export default function Home() {
     await loadAttendancePage();
   }
 
-  async function payAndRegisterGuest(person: Person) {
+  async function registerGuestPayment(person: Person) {
     setSavingId(person.id);
     setError("");
-
-    const activeSession = await ensureTrainingSession();
-    if (!activeSession) {
-      setSavingId(null);
-      return "Træningsgangen kunne ikke oprettes.";
-    }
 
     const { error: paymentError } = await supabase.rpc("register_payment", {
       p_person_id: person.id,
@@ -425,21 +506,24 @@ export default function Home() {
       return friendlyError(paymentError.message);
     }
 
-    const { error: attendanceError } = await supabase.rpc(
-      "register_attendance_for_session",
-      {
-        p_person_id: person.id,
-        p_session_id: activeSession.id,
-        p_type: "normal",
-      },
+    setSavingId(null);
+    await loadAttendancePage();
+    return null;
+  }
+
+  async function removeGuest(person: Person) {
+    setSavingId(person.id);
+    setError("");
+
+    const { data, error: removeError } = await supabase.rpc(
+      "remove_unpaid_guest",
+      { p_person_id: person.id },
     );
 
     setSavingId(null);
 
-    if (attendanceError) {
-      await loadAttendancePage();
-      return `Betalingen er gemt, men fremmødet fejlede: ${friendlyError(attendanceError.message)}`;
-    }
+    if (removeError) return friendlyError(removeError.message);
+    if (!data) return "Personen kunne ikke fjernes.";
 
     await loadAttendancePage();
     return null;
@@ -544,7 +628,11 @@ export default function Home() {
               {sortedPeople.map((person) => {
                 const checked = checkedIds.has(person.id);
                 const saving = savingId === person.id;
-                const trialUsed = guestTrialIds.has(person.id);
+                const needsPayment = guestNeedsPayment(
+                  person,
+                  guestTrialDates[person.id],
+                  sessionDate,
+                );
 
                 return (
                   <button
@@ -562,10 +650,12 @@ export default function Home() {
                       className={`flex h-7 w-7 items-center justify-center rounded-md border-2 text-base font-black ${
                         checked
                           ? "border-[#28755d] bg-[#28755d] text-white"
+                          : needsPayment
+                            ? "border-[#d0a155] bg-[#fff4df] text-[#8b5605]"
                           : "border-[#aebdb5] bg-white text-transparent"
                       }`}
                     >
-                      ✓
+                      {needsPayment ? "!" : "✓"}
                     </span>
 
                     <span className="min-w-0 truncate text-base font-bold sm:text-lg">
@@ -573,7 +663,13 @@ export default function Home() {
                     </span>
 
                     <span className="whitespace-nowrap text-sm font-bold text-[#526960] sm:text-base">
-                      {saving ? "…" : statusText(person, trialUsed, checked)}
+                      {saving
+                        ? "…"
+                        : statusText(
+                            person,
+                            guestTrialDates[person.id],
+                            sessionDate,
+                          )}
                     </span>
                   </button>
                 );
@@ -594,7 +690,8 @@ export default function Home() {
         <GuestPayment
           person={paymentPerson}
           onClose={() => setPaymentPerson(null)}
-          onConfirm={payAndRegisterGuest}
+          onConfirm={registerGuestPayment}
+          onRemove={removeGuest}
         />
       )}
     </main>
@@ -674,10 +771,12 @@ function GuestPayment({
   person,
   onClose,
   onConfirm,
+  onRemove,
 }: {
   person: Person;
   onClose: () => void;
   onConfirm: (person: Person) => Promise<string | null>;
+  onRemove: (person: Person) => Promise<string | null>;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -690,6 +789,22 @@ function GuestPayment({
 
     if (paymentError) {
       setError(paymentError);
+      return;
+    }
+
+    onClose();
+  }
+
+  async function confirmRemoval() {
+    if (!window.confirm(`Fjern ${person.name} fra listen?`)) return;
+
+    setBusy(true);
+    setError("");
+    const removeError = await onRemove(person);
+    setBusy(false);
+
+    if (removeError) {
+      setError(removeError);
       return;
     }
 
@@ -714,7 +829,8 @@ function GuestPayment({
 
         <p className="mt-3 text-base font-bold">{person.name}</p>
         <p className="mt-1 text-sm text-[#60756d]">
-          Prøvetimen er brugt. Betaling giver 10 klip, og dagens træning bruger ét.
+          Tryk først, når MobilePay er modtaget. Personen får 10 klip og
+          registreres bagefter som fremmødt på deltagerlisten.
         </p>
 
         {error && <p className="mt-3 text-sm font-semibold text-[#8d342d]">{error}</p>}
@@ -725,7 +841,16 @@ function GuestPayment({
           disabled={busy}
           className="mt-4 min-h-14 w-full rounded-xl bg-[#28755d] px-4 font-black text-white disabled:opacity-40"
         >
-          {busy ? "Gemmer…" : "Registrér 375 kr."}
+          {busy ? "Gemmer…" : "MobilePay modtaget"}
+        </button>
+
+        <button
+          type="button"
+          onClick={confirmRemoval}
+          disabled={busy}
+          className="mt-3 min-h-12 w-full rounded-xl px-4 font-bold text-[#8d342d] disabled:opacity-40"
+        >
+          Fjern fra listen
         </button>
       </div>
     </div>

@@ -123,6 +123,25 @@ begin
 end;
 $$;
 
+create or replace function public.remove_unpaid_guest(
+  p_person_id uuid
+) returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_deleted_id uuid;
+begin
+  delete from public.people
+  where id = p_person_id
+    and type = 'gæst'::public.person_type
+  returning id into v_deleted_id;
+
+  return v_deleted_id is not null;
+end;
+$$;
+
 create or replace function public.reverse_payment(
   p_payment_id uuid,
   p_note text default 'Betaling fortrudt'
@@ -269,12 +288,14 @@ revoke all on function public.get_or_create_session(uuid, date) from public, ano
 revoke all on function public.register_attendance_for_session(uuid, uuid, public.attendance_type) from public, anon;
 revoke all on function public.register_payment(uuid, integer, integer, text) from public, anon;
 revoke all on function public.undo_attendance_for_session(uuid, uuid) from public, anon;
+revoke all on function public.remove_unpaid_guest(uuid) from public, anon;
 revoke all on function public.reverse_payment(uuid, text) from public, anon;
 
 grant execute on function public.get_or_create_session(uuid, date) to anon;
 grant execute on function public.register_attendance_for_session(uuid, uuid, public.attendance_type) to anon;
 grant execute on function public.register_payment(uuid, integer, integer, text) to anon;
 grant execute on function public.undo_attendance_for_session(uuid, uuid) to anon;
+grant execute on function public.remove_unpaid_guest(uuid) to anon;
 grant execute on function public.reverse_payment(uuid, text) to anon;
 
 -- Fjern gæster, der tidligere blev oprettet automatisk som testdata.
