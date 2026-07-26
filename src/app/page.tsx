@@ -29,7 +29,9 @@ type TrainingSession = {
 
 type Attendance = { person_id: string };
 
-type ConfirmAction = { kind: "undo-attendance"; person: Person };
+type ConfirmAction =
+  | { kind: "payment"; person: Person }
+  | { kind: "undo-attendance"; person: Person };
 
 const supabase = getSupabaseBrowserClient();
 
@@ -111,6 +113,7 @@ export default function Home() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [addingPerson, setAddingPerson] = useState(false);
+  const [selectedPerson, setSelectedPerson] = useState<Person | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
@@ -369,7 +372,21 @@ export default function Home() {
     setError("");
     setNotice("");
 
-    if (trainingSession) {
+    if (confirmAction.kind === "payment") {
+      const { error: paymentError } = await supabase.rpc("register_payment", {
+        p_person_id: confirmAction.person.id,
+        p_amount_ore: 37500,
+        p_clips: 10,
+        p_note: "MobilePay Box – manuelt registreret",
+      });
+
+      if (paymentError) setError(friendlyError(paymentError.message));
+      else {
+        const newBalance = (confirmAction.person.balance ?? 0) + 10;
+        setNotice(`${confirmAction.person.name} har nu ${newBalance} klip.`);
+        await loadAttendancePage();
+      }
+    } else if (trainingSession) {
       const { error: undoError } = await supabase.rpc("undo_attendance_for_session", {
         p_person_id: confirmAction.person.id,
         p_session_id: trainingSession.id,
@@ -489,7 +506,7 @@ export default function Home() {
           <div className="border-b border-[#e8ece7] px-4 py-4">
             <h2 className="text-lg font-black">Faste deltagere</h2>
             <p className="text-sm text-[#6b837a]">
-              Tryk på et navn – personen nedtones, og ét klip trækkes
+              Cirklen registrerer fremmøde · navnet åbner personen
             </p>
           </div>
 
@@ -509,35 +526,36 @@ export default function Home() {
                     key={person.id}
                     className={checked ? "bg-[#eef1ed]" : "bg-white"}
                   >
-                    <button
-                      onClick={() => checkIn(person)}
-                      disabled={checked || savingId === person.id || !hasClips}
-                      aria-pressed={checked}
-                      className={`flex min-h-20 w-full items-center gap-4 px-4 py-3 text-left transition disabled:cursor-default ${
-                        checked ? "opacity-50" : ""
-                      }`}
-                    >
-                      <span
-                        className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full border-2 text-xl font-black ${
+                    <div className={`flex min-h-20 items-center gap-2 px-3 py-2 ${checked ? "opacity-50" : ""}`}>
+                      <button
+                        onClick={() => checkIn(person)}
+                        disabled={checked || savingId === person.id || !hasClips}
+                        aria-label={`Registrér fremmøde for ${person.name}`}
+                        aria-pressed={checked}
+                        className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full border-2 text-xl font-black disabled:cursor-default ${
                           checked
                             ? "border-[#28755d] bg-[#28755d] text-white"
                             : "border-[#bdc9c2] bg-white text-transparent"
                         }`}
                       >
                         ✓
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-lg font-extrabold">{person.name}</span>
-                        <span className="mt-0.5 block text-sm text-[#6b837a]">
-                          {balanceText(person)}
+                      </button>
+                      <button
+                        onClick={() => setSelectedPerson(person)}
+                        className="flex min-h-16 min-w-0 flex-1 items-center gap-2 rounded-2xl px-2 py-2 text-left active:bg-[#eef2ed]"
+                        aria-label={`Åbn ${person.name}`}
+                      >
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-lg font-extrabold">{person.name}</span>
+                          <span className="mt-0.5 block text-sm text-[#6b837a]">
+                            {balanceText(person)}
+                          </span>
                         </span>
-                      </span>
-                      {!checked && hasClips && (
-                        <span className="text-sm font-bold text-[#28755d]">
-                          {savingId === person.id ? "Gemmer…" : "Kryds af"}
+                        <span className="shrink-0 text-2xl font-bold text-[#28755d]" aria-hidden="true">
+                          ›
                         </span>
-                      )}
-                    </button>
+                      </button>
+                    </div>
 
                     {checked && (
                       <div className="flex justify-end gap-2 px-4 pb-3">
@@ -561,7 +579,7 @@ export default function Home() {
             <div>
               <h2 className="text-lg font-black">Gæster</h2>
               <p className="text-sm text-[#6b837a]">
-                Gemmes og følger med til næste træningsgang
+                Gemmes fremover · navnet åbner personen
               </p>
             </div>
           </div>
@@ -581,35 +599,36 @@ export default function Home() {
                     key={person.id}
                     className={checked ? "bg-[#eef1ed]" : "bg-white"}
                   >
-                    <button
-                      onClick={() => checkIn(person)}
-                      disabled={checked || savingId === person.id}
-                      aria-pressed={checked}
-                      className={`flex min-h-20 w-full items-center gap-4 px-4 py-3 text-left transition disabled:cursor-default ${
-                        checked ? "opacity-50" : ""
-                      }`}
-                    >
-                      <span
-                        className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full border-2 text-xl font-black ${
+                    <div className={`flex min-h-20 items-center gap-2 px-3 py-2 ${checked ? "opacity-50" : ""}`}>
+                      <button
+                        onClick={() => checkIn(person)}
+                        disabled={checked || savingId === person.id}
+                        aria-label={`Registrér fremmøde for ${person.name}`}
+                        aria-pressed={checked}
+                        className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full border-2 text-xl font-black disabled:cursor-default ${
                           checked
                             ? "border-[#28755d] bg-[#28755d] text-white"
                             : "border-[#bdc9c2] bg-white text-transparent"
                         }`}
                       >
                         ✓
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-lg font-extrabold">{person.name}</span>
-                        <span className="mt-0.5 block text-sm text-[#6b837a]">
-                          Gæst · gratis prøvetime
+                      </button>
+                      <button
+                        onClick={() => setSelectedPerson(person)}
+                        className="flex min-h-16 min-w-0 flex-1 items-center gap-2 rounded-2xl px-2 py-2 text-left active:bg-[#eef2ed]"
+                        aria-label={`Åbn ${person.name}`}
+                      >
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-lg font-extrabold">{person.name}</span>
+                          <span className="mt-0.5 block text-sm text-[#6b837a]">
+                            Gæst · gratis prøvetime
+                          </span>
                         </span>
-                      </span>
-                      {!checked && (
-                        <span className="text-sm font-bold text-[#28755d]">
-                          {savingId === person.id ? "Gemmer…" : "Kryds af"}
+                        <span className="shrink-0 text-2xl font-bold text-[#28755d]" aria-hidden="true">
+                          ›
                         </span>
-                      )}
-                    </button>
+                      </button>
+                    </div>
 
                     {checked && (
                       <div className="flex justify-end px-4 pb-3">
@@ -640,6 +659,17 @@ export default function Home() {
         />
       )}
 
+      {selectedPerson && (
+        <PersonPanel
+          person={selectedPerson}
+          onClose={() => setSelectedPerson(null)}
+          onRegisterPayment={() => {
+            setConfirmAction({ kind: "payment", person: selectedPerson });
+            setSelectedPerson(null);
+          }}
+        />
+      )}
+
       {confirmAction && (
         <ConfirmDialog
           action={confirmAction}
@@ -649,6 +679,57 @@ export default function Home() {
         />
       )}
     </main>
+  );
+}
+
+function PersonPanel({
+  person,
+  onClose,
+  onRegisterPayment,
+}: {
+  person: Person;
+  onClose: () => void;
+  onRegisterPayment: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-30 flex items-end bg-black/40 p-3 sm:items-center sm:justify-center">
+      <div className="w-full rounded-3xl bg-white p-5 text-[#17342b] shadow-xl sm:max-w-sm">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-sm font-bold uppercase tracking-[0.16em] text-[#6b837a]">
+              Deltager
+            </p>
+            <h2 className="mt-1 truncate text-2xl font-black">{person.name}</h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="min-h-11 min-w-11 text-3xl"
+            aria-label="Luk"
+          >
+            ×
+          </button>
+        </div>
+        <div className="mt-4 rounded-2xl bg-[#f3f5f0] p-4">
+          <p className="text-xs font-extrabold uppercase tracking-[0.15em] text-[#6b837a]">
+            Status
+          </p>
+          <p className="mt-1 text-lg font-black">{balanceText(person)}</p>
+        </div>
+        <button
+          type="button"
+          onClick={onRegisterPayment}
+          className="mt-4 min-h-14 w-full rounded-2xl bg-[#28755d] px-4 py-4 text-base font-extrabold text-white active:scale-[0.99]"
+        >
+          Registrér 375 kr. · tilføj 10 klip
+        </button>
+        {person.type === "gæst" && (
+          <p className="mt-3 text-center text-sm text-[#6b837a]">
+            Personen ændres samtidig fra gæst til medlem.
+          </p>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -736,15 +817,21 @@ function ConfirmDialog({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const isPayment = action.kind === "payment";
+  const currentBalance = action.person.balance ?? 0;
+  const newBalance = currentBalance + 10;
+
   return (
     <div className="fixed inset-0 z-40 flex items-end bg-black/40 p-3 sm:items-center sm:justify-center">
       <div className="w-full rounded-3xl bg-white p-5 text-[#17342b] shadow-xl sm:max-w-sm">
         <p className="text-sm font-bold uppercase tracking-[0.16em] text-[#6b837a]">
-          Fortryd fremmøde
+          {isPayment ? "Bekræft betaling" : "Fortryd fremmøde"}
         </p>
         <h2 className="mt-2 text-2xl font-black">{action.person.name}</h2>
         <p className="mt-3 leading-6 text-[#5f746c]">
-          Personen fjernes fra denne træningsdag, og et eventuelt klip sættes tilbage.
+          {isPayment
+            ? `Har personen betalt 375 kr.? Saldoen ændres fra ${currentBalance} til ${newBalance} klip.`
+            : "Personen fjernes fra denne træningsdag, og et eventuelt klip sættes tilbage."}
         </p>
         <div className="mt-5 grid grid-cols-2 gap-3">
           <button
@@ -759,7 +846,7 @@ function ConfirmDialog({
             onClick={onConfirm}
             className="rounded-2xl bg-[#28755d] px-4 py-3 font-extrabold text-white disabled:opacity-50"
           >
-            {busy ? "Gemmer…" : "Ja, fortryd"}
+            {busy ? "Gemmer…" : isPayment ? "Ja, registrér" : "Ja, fortryd"}
           </button>
         </div>
       </div>
