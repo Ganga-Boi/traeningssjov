@@ -30,6 +30,13 @@ type Attendance = { person_id: string };
 
 const supabase = getSupabaseBrowserClient();
 
+const LEGACY_DEMO_GUESTS = new Set([
+  "benny hansen",
+  "peter hansen",
+  "sofie (gæst)",
+]);
+const LEGACY_DEMO_GUEST_CUTOFF = new Date("2026-07-26T18:00:00Z").getTime();
+
 const DEMO_PEOPLE = [
   {
     name: "Allan Maharaj",
@@ -105,6 +112,14 @@ function classTitle(trainingClass: TrainingClass, sessionDate: string) {
 function sortTrainingClasses(items: TrainingClass[]) {
   return [...items].sort(
     (a, b) => a.weekday - b.weekday || a.start_time.localeCompare(b.start_time),
+  );
+}
+
+function isLegacyDemoGuest(person: Person) {
+  return (
+    person.type === "gæst" &&
+    LEGACY_DEMO_GUESTS.has(person.name.trim().toLocaleLowerCase("da-DK")) &&
+    new Date(person.created_at).getTime() < LEGACY_DEMO_GUEST_CUTOFF
   );
 }
 
@@ -203,7 +218,9 @@ export default function Home() {
       return;
     }
 
-    let loadedPeople = (peopleResult.data ?? []) as Person[];
+    let loadedPeople = ((peopleResult.data ?? []) as Person[]).filter(
+      (person) => !isLegacyDemoGuest(person),
+    );
 
     if (loadedPeople.length === 0) {
       const { data: demoPeople, error: demoError } = await supabase
