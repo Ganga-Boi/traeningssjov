@@ -4,6 +4,10 @@
 
 begin;
 
+-- Ældre databaser mangler denne kolonne, selv om den findes i den nyeste schema.sql.
+alter table public.people
+  add column if not exists privacy_notice_given_at timestamptz;
+
 create unique index if not exists payments_one_reversal_per_payment
   on public.payments(reversed_payment_id)
   where reversed_payment_id is not null;
