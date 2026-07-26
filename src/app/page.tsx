@@ -281,12 +281,12 @@ export default function Home() {
     [people],
   );
 
-  const currentGuests = useMemo(
+  const sortedGuests = useMemo(
     () =>
       people
-        .filter((person) => person.type === "gæst" && checkedIds.has(person.id))
+        .filter((person) => person.type === "gæst")
         .sort((a, b) => a.name.localeCompare(b.name, "da")),
-    [checkedIds, people],
+    [people],
   );
 
   async function checkIn(person: Person) {
@@ -559,48 +559,77 @@ export default function Home() {
         <section className="mt-4 overflow-hidden rounded-3xl border border-[#dce2da] bg-white shadow-sm">
           <div className="border-b border-[#e8ece7] px-4 py-4">
             <div>
-              <h2 className="text-lg font-black">Gæsteliste</h2>
-              <p className="text-sm text-[#6b837a]">Kun gæster til denne træningsgang</p>
+              <h2 className="text-lg font-black">Gæster</h2>
+              <p className="text-sm text-[#6b837a]">
+                Gemmes og følger med til næste træningsgang
+              </p>
             </div>
           </div>
 
           {pageLoading ? (
             <div className="px-5 py-8 text-center font-bold text-[#6b837a]">Henter gæster…</div>
-          ) : currentGuests.length === 0 ? (
+          ) : sortedGuests.length === 0 ? (
             <div className="px-5 py-8 text-center text-sm text-[#6b837a]">
-              Ingen gæster på denne træningsgang.
+              Ingen gemte gæster endnu.
             </div>
           ) : (
             <div className="divide-y divide-[#edf0ec]">
-              {currentGuests.map((person) => (
-                <div key={person.id} className="bg-[#eef1ed]">
-                  <div className="flex min-h-20 items-center gap-4 px-4 py-3 opacity-70">
-                    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border-2 border-[#28755d] bg-[#28755d] text-xl font-black text-white">
-                      ✓
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-lg font-extrabold">{person.name}</span>
-                      <span className="mt-0.5 block text-sm text-[#6b837a]">
-                        Gæst · gratis prøvetime
-                      </span>
-                    </span>
-                  </div>
-                  <div className="flex justify-end px-4 pb-3">
+              {sortedGuests.map((person) => {
+                const checked = checkedIds.has(person.id);
+                return (
+                  <div
+                    key={person.id}
+                    className={checked ? "bg-[#eef1ed]" : "bg-white"}
+                  >
                     <button
-                      onClick={() => setConfirmAction({ kind: "undo-attendance", person })}
-                      className="min-h-11 rounded-xl border border-[#ccd6d0] px-4 py-2 text-xs font-extrabold text-[#5f746c]"
+                      onClick={() => checkIn(person)}
+                      disabled={checked || savingId === person.id}
+                      aria-pressed={checked}
+                      className={`flex min-h-20 w-full items-center gap-4 px-4 py-3 text-left transition disabled:cursor-default ${
+                        checked ? "opacity-50" : ""
+                      }`}
                     >
-                      Fjern fra listen
+                      <span
+                        className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full border-2 text-xl font-black ${
+                          checked
+                            ? "border-[#28755d] bg-[#28755d] text-white"
+                            : "border-[#bdc9c2] bg-white text-transparent"
+                        }`}
+                      >
+                        ✓
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-lg font-extrabold">{person.name}</span>
+                        <span className="mt-0.5 block text-sm text-[#6b837a]">
+                          Gæst · gratis prøvetime
+                        </span>
+                      </span>
+                      {!checked && (
+                        <span className="text-sm font-bold text-[#28755d]">
+                          {savingId === person.id ? "Gemmer…" : "Kryds af"}
+                        </span>
+                      )}
                     </button>
+
+                    {checked && (
+                      <div className="flex justify-end px-4 pb-3">
+                        <button
+                          onClick={() => setConfirmAction({ kind: "undo-attendance", person })}
+                          className="min-h-11 rounded-xl border border-[#ccd6d0] px-4 py-2 text-xs font-extrabold text-[#5f746c]"
+                        >
+                          Fortryd fremmøde
+                        </button>
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </section>
 
         <p className="mt-5 text-center text-xs leading-5 text-[#6b837a]">
-          Medlemmer og klipsaldi følger med. Gæster vises kun på den træningsgang, de tilføjes til.
+          Medlemmer, gæster og klipsaldi følger med. Kun dagens fremmøde nulstilles.
         </p>
       </div>
 
