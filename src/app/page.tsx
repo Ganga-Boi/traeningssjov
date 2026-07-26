@@ -66,6 +66,32 @@ function displayDate(value: string) {
   }).format(new Date(`${value}T12:00:00`));
 }
 
+function sortTrainingClasses(items: TrainingClass[]) {
+  return [...items].sort(
+    (a, b) => a.weekday - b.weekday || a.start_time.localeCompare(b.start_time),
+  );
+}
+
+function initialTrainingClass(items: TrainingClass[]) {
+  const today = new Date();
+  const weekday = today.getDay() === 0 ? 7 : today.getDay();
+  const todayClasses = items.filter((item) => item.weekday === weekday);
+
+  if (todayClasses.length > 0) {
+    const currentTime = `${String(today.getHours()).padStart(2, "0")}:${String(
+      today.getMinutes(),
+    ).padStart(2, "0")}`;
+    return (
+      todayClasses.find((item) => item.end_time.slice(0, 5) >= currentTime) ??
+      todayClasses.at(-1)
+    );
+  }
+
+  return [...items].sort(
+    (a, b) => ((a.weekday - weekday + 7) % 7) - ((b.weekday - weekday + 7) % 7),
+  )[0];
+}
+
 function friendlyError(message: string) {
   if (/permission denied|row-level security/i.test(message)) {
     return "Databasen er ikke færdigopsat endnu. Kontakt Allan.";
@@ -109,10 +135,20 @@ export default function Home() {
       .from("classes")
       .select("id,name,weekday,start_time,end_time,sort_order")
       .eq("active", true)
-      .order("sort_order");
+      .order("weekday")
+      .order("start_time");
 
     if (classError) setError(friendlyError(classError.message));
-    else setClasses((data ?? []) as TrainingClass[]);
+    else {
+      const loadedClasses = sortTrainingClasses((data ?? []) as TrainingClass[]);
+      const initialClass = initialTrainingClass(loadedClasses);
+      setClasses(loadedClasses);
+
+      if (initialClass) {
+        setSelectedClass(initialClass);
+        setSessionDate(nearestDateForWeekday(initialClass.weekday));
+      }
+    }
     setLoading(false);
   }, []);
 
@@ -307,41 +343,18 @@ export default function Home() {
 
   if (!selectedClass) {
     return (
-      <main className="min-h-screen bg-[#f3f5f0] px-4 py-7 text-[#17342b]">
-        <div className="mx-auto max-w-xl">
+      <main className="min-h-screen bg-[#f3f5f0] px-4 py-12 text-[#17342b]">
+        <div className="mx-auto max-w-xl rounded-3xl border border-[#dce2da] bg-white p-6 shadow-sm">
           <p className="text-[11px] font-extrabold uppercase tracking-[0.24em] text-[#6b837a]">
             Træningssjov
           </p>
-          <h1 className="mt-1 text-3xl font-black">Vælg hold</h1>
-          <p className="mt-2 text-sm leading-6 text-[#6b837a]">
-            Deltagere og klipsaldi følger automatisk med fra træningsdag til træningsdag.
-          </p>
+          <h1 className="mt-2 text-2xl font-black">Ingen træningsdage fundet</h1>
           {error && <ErrorBox message={error} />}
-          <div className="mt-6 space-y-3">
-            {classes.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => chooseClass(item)}
-                className="flex w-full items-center justify-between rounded-3xl border border-[#dce2da] bg-white p-5 text-left shadow-sm transition active:scale-[0.99]"
-              >
-                <span>
-                  <span className="block text-xl font-black">{item.name}</span>
-                  <span className="mt-1 block text-[#6b837a]">
-                    {displayTime(item.start_time)}–{displayTime(item.end_time)}
-                  </span>
-                </span>
-                <span className="text-2xl text-[#28755d]">›</span>
-              </button>
-            ))}
-          </div>
-          {!error && classes.length === 0 && (
-            <div className="mt-6 rounded-3xl bg-white p-5 text-sm text-[#6b837a] shadow-sm">
-              Der er endnu ikke oprettet nogen hold.
-            </div>
+          {!error && (
+            <p className="mt-3 text-sm leading-6 text-[#6b837a]">
+              Kør databaseopsætningen i Supabase, og genindlæs siden.
+            </p>
           )}
-          <Link href="/privatliv" className="mt-7 inline-block text-sm font-bold text-[#28755d]">
-            Privatliv og data
-          </Link>
         </div>
       </main>
     );
@@ -351,13 +364,15 @@ export default function Home() {
     <main className="min-h-screen bg-[#f3f5f0] text-[#17342b]">
       <header className="sticky top-0 z-10 border-b border-[#dce2da] bg-white/95 backdrop-blur">
         <div className="mx-auto max-w-xl px-4 py-3">
-          <button
-            onClick={() => setSelectedClass(null)}
-            className="rounded-xl py-2 pr-3 text-sm font-extrabold text-[#28755d]"
-          >
-            ‹ Hold
-          </button>
-          <div className="mt-1 flex items-end justify-between gap-3">
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] font-extrabold uppercase tracking-[0.24em] text-[#6b837a]">
+              Træningssjov
+            </p>
+            <Link href="/privatliv" className="text-xs font-bold text-[#28755d]">
+              Privatliv
+            </Link>
+          </div>
+          <div className="mt-2 flex items-end justify-between gap-3">
             <div>
               <p className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-[#6b837a]">
                 {selectedClass.name}
@@ -375,6 +390,41 @@ export default function Home() {
 
       <div className="mx-auto max-w-xl px-4 pb-16 pt-4">
         <section className="rounded-3xl border border-[#dce2da] bg-white p-4 shadow-sm">
+          <div>
+            <h2 className="text-lg font-black">Træningsdag</h2>
+            <p className="mt-0.5 text-sm text-[#6b837a]">
+              Samme deltagere og klipsaldi på alle træningsgange
+            </p>
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            {classes.map((item) => {
+              const active = item.id === selectedClass.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => chooseClass(item)}
+                  aria-pressed={active}
+                  className={`rounded-2xl border px-3 py-3 text-left transition active:scale-[0.99] ${
+                    active
+                      ? "border-[#28755d] bg-[#28755d] text-white"
+                      : "border-[#d7dfda] bg-[#f8faf7] text-[#17342b]"
+                  }`}
+                >
+                  <span className="block text-sm font-black">{item.name}</span>
+                  <span
+                    className={`mt-1 block text-xs font-semibold ${
+                      active ? "text-white/80" : "text-[#6b837a]"
+                    }`}
+                  >
+                    {displayTime(item.start_time)}–{displayTime(item.end_time)}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
+        <section className="mt-4 rounded-3xl border border-[#dce2da] bg-white p-4 shadow-sm">
           <div className="grid grid-cols-[auto_1fr_auto] items-center gap-2">
             <button
               onClick={() => changeSessionDate(moveDate(sessionDate, -7))}
@@ -499,7 +549,7 @@ export default function Home() {
         </section>
 
         <p className="mt-5 text-center text-xs leading-5 text-[#6b837a]">
-          Nyt hold eller ny dato nulstiller kun fremmødet. Navne og klipsaldi følger med.
+          En ny træningsgang nulstiller kun fremmødet. Navne, gæster og klipsaldi følger med.
         </p>
       </div>
 
