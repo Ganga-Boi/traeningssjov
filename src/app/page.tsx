@@ -29,9 +29,7 @@ type TrainingSession = {
 
 type Attendance = { person_id: string };
 
-type ConfirmAction =
-  | { kind: "payment"; person: Person }
-  | { kind: "undo-attendance"; person: Person };
+type ConfirmAction = { kind: "undo-attendance"; person: Person };
 
 const supabase = getSupabaseBrowserClient();
 
@@ -88,10 +86,6 @@ function balanceText(person: Person) {
   if (person.balance < 0) return `${person.balance} klip · på kredit`;
   if (person.balance === 0) return "0 klip · skal betale";
   return `${person.balance} klip tilbage`;
-}
-
-function needsPayment(person: Person) {
-  return person.type === "gæst" || person.payment_status !== "ok" || (person.balance ?? 0) <= 2;
 }
 
 const DEMO_PEOPLE = [
@@ -296,7 +290,14 @@ export default function Home() {
   );
 
   async function checkIn(person: Person) {
-    if (checkedIds.has(person.id) || savingId || trainingSession?.status === "aflyst") return;
+    if (
+      checkedIds.has(person.id) ||
+      savingId ||
+      trainingSession?.status === "aflyst" ||
+      (person.type === "medlem" && (person.balance ?? 0) <= 0)
+    ) {
+      return;
+    }
     setSavingId(person.id);
     setError("");
     setNotice("");
@@ -307,8 +308,7 @@ export default function Home() {
       return;
     }
 
-    const attendanceType =
-      person.type === "gæst" ? "prøvetime" : (person.balance ?? 0) > 0 ? "normal" : "kredit";
+    const attendanceType = person.type === "gæst" ? "prøvetime" : "normal";
 
     const { error: rpcError } = await supabase.rpc("register_attendance_for_session", {
       p_person_id: person.id,
@@ -326,7 +326,6 @@ export default function Home() {
       return;
     }
 
-    setNotice(`${person.name} er krydset af.`);
     await loadAttendancePage();
   }
 
@@ -370,20 +369,7 @@ export default function Home() {
     setError("");
     setNotice("");
 
-    if (confirmAction.kind === "payment") {
-      const { error: paymentError } = await supabase.rpc("register_payment", {
-        p_person_id: confirmAction.person.id,
-        p_amount_ore: 37500,
-        p_clips: 10,
-        p_note: "MobilePay Box – manuelt godkendt",
-      });
-
-      if (paymentError) setError(friendlyError(paymentError.message));
-      else {
-        setNotice(`${confirmAction.person.name}: betaling registreret og 10 klip tilføjet.`);
-        await loadAttendancePage();
-      }
-    } else if (trainingSession) {
+    if (trainingSession) {
       const { error: undoError } = await supabase.rpc("undo_attendance_for_session", {
         p_person_id: confirmAction.person.id,
         p_session_id: trainingSession.id,
@@ -492,6 +478,13 @@ export default function Home() {
           </div>
         )}
 
+        <button
+          onClick={() => setAddingPerson(true)}
+          className="mt-4 flex min-h-14 w-full items-center justify-center rounded-2xl bg-[#17342b] px-5 py-4 text-base font-extrabold text-white shadow-sm active:scale-[0.99]"
+        >
+          + Tilføj gæst
+        </button>
+
         <section className="mt-4 overflow-hidden rounded-3xl border border-[#dce2da] bg-white shadow-sm">
           <div className="border-b border-[#e8ece7] px-4 py-4">
             <h2 className="text-lg font-black">Faste deltagere</h2>
@@ -510,6 +503,7 @@ export default function Home() {
             <div className="divide-y divide-[#edf0ec]">
               {sortedMembers.map((person) => {
                 const checked = checkedIds.has(person.id);
+                const hasClips = (person.balance ?? 0) > 0;
                 return (
                   <div
                     key={person.id}
@@ -517,7 +511,7 @@ export default function Home() {
                   >
                     <button
                       onClick={() => checkIn(person)}
-                      disabled={checked || savingId === person.id}
+                      disabled={checked || savingId === person.id || !hasClips}
                       aria-pressed={checked}
                       className={`flex min-h-20 w-full items-center gap-4 px-4 py-3 text-left transition disabled:cursor-default ${
                         checked ? "opacity-50" : ""
@@ -535,34 +529,24 @@ export default function Home() {
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-lg font-extrabold">{person.name}</span>
                         <span className="mt-0.5 block text-sm text-[#6b837a]">
-                          {checked ? `Mødt · ${balanceText(person)}` : balanceText(person)}
+                          {balanceText(person)}
                         </span>
                       </span>
-                      {!checked && (
+                      {!checked && hasClips && (
                         <span className="text-sm font-bold text-[#28755d]">
                           {savingId === person.id ? "Gemmer…" : "Kryds af"}
                         </span>
                       )}
                     </button>
 
-                    {(checked || needsPayment(person)) && (
+                    {checked && (
                       <div className="flex justify-end gap-2 px-4 pb-3">
-                        {checked && (
-                          <button
-                            onClick={() => setConfirmAction({ kind: "undo-attendance", person })}
-                            className="rounded-xl border border-[#ccd6d0] px-3 py-2 text-xs font-extrabold text-[#5f746c]"
-                          >
-                            Fortryd fremmøde
-                          </button>
-                        )}
-                        {needsPayment(person) && (
-                          <button
-                            onClick={() => setConfirmAction({ kind: "payment", person })}
-                            className="rounded-xl bg-[#fff2d7] px-3 py-2 text-xs font-extrabold text-[#80580c]"
-                          >
-                            Betaling modtaget
-                          </button>
-                        )}
+                        <button
+                          onClick={() => setConfirmAction({ kind: "undo-attendance", person })}
+                          className="min-h-11 rounded-xl border border-[#ccd6d0] px-4 py-2 text-xs font-extrabold text-[#5f746c]"
+                        >
+                          Fortryd fremmøde
+                        </button>
                       </div>
                     )}
                   </div>
@@ -573,17 +557,11 @@ export default function Home() {
         </section>
 
         <section className="mt-4 overflow-hidden rounded-3xl border border-[#dce2da] bg-white shadow-sm">
-          <div className="flex items-center justify-between border-b border-[#e8ece7] px-4 py-4">
+          <div className="border-b border-[#e8ece7] px-4 py-4">
             <div>
               <h2 className="text-lg font-black">Gæsteliste</h2>
               <p className="text-sm text-[#6b837a]">Kun gæster til denne træningsgang</p>
             </div>
-            <button
-              onClick={() => setAddingPerson(true)}
-              className="rounded-2xl bg-[#17342b] px-4 py-3 text-sm font-extrabold text-white"
-            >
-              + Gæst
-            </button>
           </div>
 
           {pageLoading ? (
@@ -607,18 +585,12 @@ export default function Home() {
                       </span>
                     </span>
                   </div>
-                  <div className="flex justify-end gap-2 px-4 pb-3">
+                  <div className="flex justify-end px-4 pb-3">
                     <button
                       onClick={() => setConfirmAction({ kind: "undo-attendance", person })}
-                      className="rounded-xl border border-[#ccd6d0] px-3 py-2 text-xs font-extrabold text-[#5f746c]"
+                      className="min-h-11 rounded-xl border border-[#ccd6d0] px-4 py-2 text-xs font-extrabold text-[#5f746c]"
                     >
                       Fjern fra listen
-                    </button>
-                    <button
-                      onClick={() => setConfirmAction({ kind: "payment", person })}
-                      className="rounded-xl bg-[#fff2d7] px-3 py-2 text-xs font-extrabold text-[#80580c]"
-                    >
-                      Betaling modtaget
                     </button>
                   </div>
                 </div>
@@ -735,19 +707,15 @@ function ConfirmDialog({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
-  const isPayment = action.kind === "payment";
-
   return (
     <div className="fixed inset-0 z-40 flex items-end bg-black/40 p-3 sm:items-center sm:justify-center">
       <div className="w-full rounded-3xl bg-white p-5 text-[#17342b] shadow-xl sm:max-w-sm">
         <p className="text-sm font-bold uppercase tracking-[0.16em] text-[#6b837a]">
-          {isPayment ? "Bekræft betaling" : "Fortryd fremmøde"}
+          Fortryd fremmøde
         </p>
         <h2 className="mt-2 text-2xl font-black">{action.person.name}</h2>
         <p className="mt-3 leading-6 text-[#5f746c]">
-          {isPayment
-            ? "Har personen betalt 375 kr. via MobilePay? Der tilføjes 10 klip."
-            : "Personen fjernes fra denne træningsdag, og et eventuelt klip sættes tilbage."}
+          Personen fjernes fra denne træningsdag, og et eventuelt klip sættes tilbage.
         </p>
         <div className="mt-5 grid grid-cols-2 gap-3">
           <button
@@ -762,7 +730,7 @@ function ConfirmDialog({
             onClick={onConfirm}
             className="rounded-2xl bg-[#28755d] px-4 py-3 font-extrabold text-white disabled:opacity-50"
           >
-            {busy ? "Gemmer…" : isPayment ? "Ja, registrér" : "Ja, fortryd"}
+            {busy ? "Gemmer…" : "Ja, fortryd"}
           </button>
         </div>
       </div>
