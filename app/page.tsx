@@ -36,12 +36,25 @@ function dateValue(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
-function nearestDate(weekday: number) {
-  const today = new Date();
-  const current = today.getDay() === 0 ? 7 : today.getDay();
-  const result = new Date(today);
-  result.setDate(today.getDate() + weekday - current);
+function dateForClass(item: TrainingClass) {
+  const now = new Date();
+  const currentWeekday = now.getDay() === 0 ? 7 : now.getDay();
+  let daysAhead = item.weekday - currentWeekday;
+  const [hour, minute] = item.start_time.split(":").map(Number);
+
+  if (daysAhead < 0 || (daysAhead === 0 && now.getHours() * 60 + now.getMinutes() > hour * 60 + minute + 60)) {
+    daysAhead += 7;
+  }
+
+  const result = new Date(now);
+  result.setDate(now.getDate() + daysAhead);
   return dateValue(result);
+}
+
+function nextClass(items: TrainingClass[]) {
+  return [...items]
+    .map((item) => ({ item, date: dateForClass(item) }))
+    .sort((a, b) => `${a.date} ${a.item.start_time}`.localeCompare(`${b.date} ${b.item.start_time}`))[0];
 }
 
 function time(value: string) {
@@ -71,8 +84,18 @@ export default function Home() {
       .eq("active", true)
       .order("weekday")
       .order("start_time");
-    if (error) setError(error.message);
-    else setClasses((data ?? []) as TrainingClass[]);
+
+    if (error) {
+      setError(error.message);
+    } else {
+      const loaded = (data ?? []) as TrainingClass[];
+      setClasses(loaded);
+      const upcoming = nextClass(loaded);
+      if (upcoming) {
+        setSelectedClass(upcoming.item);
+        setSessionDate(upcoming.date);
+      }
+    }
     setLoading(false);
   }
 
@@ -132,40 +155,41 @@ export default function Home() {
     await loadPage();
   }
 
+  function changeClass(classId: string) {
+    const item = classes.find((entry) => entry.id === classId);
+    if (!item) return;
+    setTrainingSession(null);
+    setChecked(new Set());
+    setSelectedClass(item);
+    setSessionDate(dateForClass(item));
+  }
+
   const sortedPeople = useMemo(() => [...people].sort((a, b) => {
     if (a.type !== b.type) return a.type === "gæst" ? -1 : 1;
     return a.name.localeCompare(b.name, "da");
   }), [people]);
 
-  if (loading) return <main style={styles.center}>Indlæser…</main>;
-
-  if (!selectedClass) {
-    return (
-      <main style={styles.page}>
-        <div style={styles.shell}>
-          <p style={styles.brand}>TRÆNINGSSJOV</p>
-          <h1 style={styles.title}>Vælg hold</h1>
-          {error && <div style={styles.error}>{error}</div>}
-          <div style={{ display: "grid", gap: 12, marginTop: 24 }}>
-            {classes.map((item) => (
-              <button key={item.id} onClick={() => { setSelectedClass(item); setSessionDate(nearestDate(item.weekday)); }} style={styles.classCard}>
-                <span><strong style={{ fontSize: 20 }}>{item.name}</strong><span style={styles.sub}>{time(item.start_time)}–{time(item.end_time)}</span></span>
-                <span style={{ fontSize: 28, color: c.green }}>›</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      </main>
-    );
-  }
+  if (loading || !selectedClass) return <main style={styles.center}>Indlæser…</main>;
 
   return (
     <main style={styles.page}>
       <div style={styles.shell}>
-        <button onClick={() => setSelectedClass(null)} style={styles.back}>‹ Hold</button>
-        <p style={styles.brand}>{selectedClass.name}</p>
-        <h1 style={{ ...styles.title, marginBottom: 4 }}>{time(selectedClass.start_time)}–{time(selectedClass.end_time)}</h1>
-        <input type="date" value={sessionDate} onChange={(e) => setSessionDate(e.target.value)} style={styles.dateInput} />
+        <p style={styles.brand}>TRÆNINGSSJOV</p>
+        <div style={styles.headingRow}>
+          <div>
+            <h1 style={{ ...styles.title, marginBottom: 4 }}>{selectedClass.name}</h1>
+            <strong style={{ fontSize: 18 }}>{time(selectedClass.start_time)}–{time(selectedClass.end_time)}</strong>
+          </div>
+          <span style={styles.count}>{checked.size} mødt</span>
+        </div>
+
+        <div style={styles.controls}>
+          <select value={selectedClass.id} onChange={(e) => changeClass(e.target.value)} style={styles.select} aria-label="Vælg hold">
+            {classes.map((item) => <option key={item.id} value={item.id}>{item.name} · {time(item.start_time)}–{time(item.end_time)}</option>)}
+          </select>
+          <input type="date" value={sessionDate} onChange={(e) => setSessionDate(e.target.value)} style={styles.dateInput} />
+        </div>
+
         {error && <div style={styles.error}>{error}</div>}
 
         <section style={styles.card}>
@@ -185,7 +209,7 @@ export default function Home() {
                     <strong style={{ fontSize: 18 }}>{person.name}</strong>
                     {person.type === "gæst" && <span style={styles.badge}>Gæst</span>}
                   </span>
-                  <span style={styles.sub}>{isChecked ? "Mødt op" : person.type === "gæst" ? "Tryk på navnet for at gøre til medlem" : `${person.balance} klip tilbage`}</span>
+                  <span style={styles.sub}>{isChecked ? "Mødt op" : person.type === "gæst" ? "Gæstedeltager" : `${person.balance} klip tilbage`}</span>
                 </button>
               </div>
             );
@@ -227,16 +251,18 @@ const styles: Record<string, React.CSSProperties> = {
   shell: { width: "100%", maxWidth: 620, margin: "0 auto" },
   center: { minHeight: "100vh", display: "grid", placeItems: "center", background: c.bg, color: c.muted, fontFamily: "Arial" },
   brand: { fontSize: 12, letterSpacing: 3, fontWeight: 800, color: c.muted, margin: 0 },
-  title: { fontSize: 34, lineHeight: 1.1, margin: "8px 0 0", fontWeight: 800 },
-  classCard: { width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", padding: 20, borderRadius: 22, border: `1px solid ${c.border}`, background: c.card, color: c.text, textAlign: "left", boxShadow: "0 2px 5px rgba(0,0,0,.05)", cursor: "pointer" },
+  title: { fontSize: 32, lineHeight: 1.1, margin: "8px 0 0", fontWeight: 800 },
+  headingRow: { display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 12 },
+  count: { background: "#e8f1ec", color: c.green, borderRadius: 999, padding: "8px 12px", fontSize: 13, fontWeight: 800, whiteSpace: "nowrap" },
+  controls: { display: "grid", gridTemplateColumns: "minmax(0, 1.5fr) minmax(145px, 1fr)", gap: 10, marginTop: 20 },
+  select: { width: "100%", padding: 14, borderRadius: 16, border: `1px solid ${c.border}`, background: c.card, color: c.text, fontSize: 15, fontWeight: 700, boxSizing: "border-box" },
   sub: { display: "block", marginTop: 4, color: c.muted, fontSize: 14 },
-  back: { border: 0, background: "transparent", color: c.green, fontWeight: 700, padding: "8px 0", cursor: "pointer" },
-  dateInput: { width: "100%", marginTop: 16, padding: 14, borderRadius: 16, border: `1px solid ${c.border}`, background: c.card, fontSize: 16, boxSizing: "border-box" },
+  dateInput: { width: "100%", padding: 14, borderRadius: 16, border: `1px solid ${c.border}`, background: c.card, color: c.text, fontSize: 15, fontWeight: 700, boxSizing: "border-box" },
   card: { marginTop: 16, background: c.card, border: `1px solid ${c.border}`, borderRadius: 22, overflow: "hidden", boxShadow: "0 2px 5px rgba(0,0,0,.05)" },
   cardHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: 16, borderBottom: `1px solid ${c.border}` },
   primary: { border: 0, borderRadius: 14, background: c.text, color: "white", fontWeight: 800, padding: "11px 16px", cursor: "pointer" },
-  personRow: { display: "flex", alignItems: "center", gap: 12, minHeight: 76, padding: "10px 16px", borderBottom: `1px solid #edf0ec` },
-  check: { width: 46, height: 46, borderRadius: "50%", border: `2px solid #bdc9c2`, background: "white", color: "transparent", fontSize: 20, fontWeight: 900, flexShrink: 0, cursor: "pointer" },
+  personRow: { display: "flex", alignItems: "center", gap: 12, minHeight: 76, padding: "10px 16px", borderBottom: "1px solid #edf0ec" },
+  check: { width: 46, height: 46, borderRadius: "50%", border: "2px solid #bdc9c2", background: "white", color: "transparent", fontSize: 20, fontWeight: 900, flexShrink: 0, cursor: "pointer" },
   checked: { background: c.green, borderColor: c.green, color: "white" },
   personButton: { border: 0, background: "transparent", color: c.text, textAlign: "left", flex: 1, padding: 0, cursor: "pointer" },
   badge: { background: "#fff0d8", color: "#8b5605", borderRadius: 999, padding: "4px 8px", fontSize: 12, fontWeight: 800 },
