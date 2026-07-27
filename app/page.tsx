@@ -28,7 +28,7 @@ type TrainingSession = {
 
 type Attendance = { person_id: string };
 type TrialAttendance = { person_id: string; session_id: string | null };
-type TrialSession = { id: string; session_date: string; class_id: string };
+type TrialSession = { id: string; session_date: string };
 
 const supabase = getSupabaseBrowserClient();
 
@@ -107,10 +107,6 @@ function normalizedName(value: string) {
   return value.trim().toLocaleLowerCase("da-DK");
 }
 
-function rosterKey(trainingClass: TrainingClass) {
-  return `${trainingClass.weekday}-${trainingClass.start_time.slice(0, 5)}`;
-}
-
 function localDateValue(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
@@ -164,12 +160,49 @@ function isLegacyDemoGuest(person: Person) {
   );
 }
 
+function preferredDuplicate(a: Person, b: Person) {
+  if (a.type !== b.type) return a.type === "medlem" ? a : b;
+
+  if (a.type === "medlem") {
+    const balanceDifference = (a.balance ?? 0) - (b.balance ?? 0);
+    if (balanceDifference !== 0) return balanceDifference > 0 ? a : b;
+  }
+
+  return new Date(a.created_at).getTime() >= new Date(b.created_at).getTime()
+    ? a
+    : b;
+}
+
+function uniquePeopleByName(items: Person[]) {
+  const uniquePeople = new Map<string, Person>();
+
+  for (const person of items) {
+    const key = normalizedName(person.name);
+    const existing = uniquePeople.get(key);
+    uniquePeople.set(key, existing ? preferredDuplicate(existing, person) : person);
+  }
+
+  return [...uniquePeople.values()];
+}
+
 function guestNeedsPayment(
   person: Person,
   trialDate: string | undefined,
   sessionDate: string,
 ) {
   return person.type === "gæst" && Boolean(trialDate && sessionDate > trialDate);
+}
+
+function personNeedsPayment(
+  person: Person,
+  trialDate: string | undefined,
+  sessionDate: string,
+) {
+  if (person.type === "gæst") {
+    return guestNeedsPayment(person, trialDate, sessionDate);
+  }
+
+  return (person.balance ?? 0) <= 0;
 }
 
 function statusText(
@@ -182,7 +215,7 @@ function statusText(
       ? "Skal betale"
       : "Gæst";
   }
-  if ((person.balance ?? 0) <= 0) return "Kredit";
+  if ((person.balance ?? 0) <= 0) return "0 klip · betal";
   return `${person.balance} klip`;
 }
 
@@ -209,7 +242,6 @@ export default function Home() {
   const [people, setPeople] = useState<Person[]>([]);
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const [guestTrialDates, setGuestTrialDates] = useState<Record<string, string>>({});
-  const [trialClassIds, setTrialClassIds] = useState<Record<string, string[]>>({});
   const [error, setError] = useState("");
   const [addingGuest, setAddingGuest] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -325,7 +357,7 @@ export default function Home() {
     if (trialSessionIds.length > 0) {
       const { data, error: trialSessionError } = await supabase
         .from("sessions")
-        .select("id,session_date,class_id")
+        .select("id,session_date")
         .in("id", trialSessionIds);
 
       if (trialSessionError) {
@@ -340,16 +372,11 @@ export default function Home() {
     const sessionDatesById = new Map(
       trialSessions.map((session) => [session.id, session.session_date]),
     );
-    const classIdsBySessionId = new Map(
-      trialSessions.map((session) => [session.id, session.class_id]),
-    );
     const nextTrialDates: Record<string, string> = {};
-    const nextTrialClassIds: Record<string, string[]> = {};
 
     for (const row of trialRows) {
       if (!row.session_id) continue;
       const trialDate = sessionDatesById.get(row.session_id);
-      const trialClassId = classIdsBySessionId.get(row.session_id);
       if (
         trialDate &&
         (!nextTrialDates[row.person_id] ||
@@ -357,21 +384,11 @@ export default function Home() {
       ) {
         nextTrialDates[row.person_id] = trialDate;
       }
-      if (
-        trialClassId &&
-        !nextTrialClassIds[row.person_id]?.includes(trialClassId)
-      ) {
-        nextTrialClassIds[row.person_id] = [
-          ...(nextTrialClassIds[row.person_id] ?? []),
-          trialClassId,
-        ];
-      }
     }
 
     setPeople(loadedPeople);
     setTrainingSession(foundSession);
     setGuestTrialDates(nextTrialDates);
-    setTrialClassIds(nextTrialClassIds);
 
     if (!foundSession) {
       setCheckedIds(new Set());
@@ -448,29 +465,7 @@ export default function Home() {
   const sortedPeople = useMemo(() => {
     if (!selectedClass) return [];
 
-    const fixedRosterNames = new Set(
-      (DEMO_ROSTERS[rosterKey(selectedClass)] ?? []).map((person) =>
-        normalizedName(person.name),
-      ),
-    );
-    const visiblePeople = people.filter(
-      (person) => {
-        const isFixedMember = fixedRosterNames.has(normalizedName(person.name));
-        const trialDate = guestTrialDates[person.id];
-        const joinedThisClass =
-          trialClassIds[person.id]?.includes(selectedClass.id) &&
-          Boolean(trialDate && sessionDate >= trialDate);
-        const carriedForwardFromEarlierTrial = Boolean(
-          trialDate && sessionDate > trialDate,
-        );
-
-        return (
-          isFixedMember ||
-          joinedThisClass ||
-          carriedForwardFromEarlierTrial
-        );
-      },
-    );
+    const visiblePeople = uniquePeopleByName(people);
 
     return visiblePeople.sort((a, b) => {
       if (a.type !== b.type) return a.type === "gæst" ? -1 : 1;
@@ -479,28 +474,19 @@ export default function Home() {
           new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
         );
       }
-      return a.name.localeCompare(b.name, "da");
+
+      const balanceDifference = (b.balance ?? 0) - (a.balance ?? 0);
+      return balanceDifference || a.name.localeCompare(b.name, "da");
     });
-  }, [guestTrialDates, people, selectedClass, sessionDate, trialClassIds]);
+  }, [people, selectedClass]);
 
   async function toggleAttendance(person: Person) {
     if (savingId || trainingSession?.status === "aflyst") return;
 
-    if (
-      guestNeedsPayment(
-        person,
-        guestTrialDates[person.id],
-        sessionDate,
-      )
-    ) {
-      setPaymentPerson(person);
-      return;
-    }
-
-    setSavingId(person.id);
-    setError("");
-
     if (checkedIds.has(person.id)) {
+      setSavingId(person.id);
+      setError("");
+
       if (!trainingSession) {
         setSavingId(null);
         return;
@@ -522,6 +508,20 @@ export default function Home() {
       return;
     }
 
+    if (
+      personNeedsPayment(
+        person,
+        guestTrialDates[person.id],
+        sessionDate,
+      )
+    ) {
+      setPaymentPerson(person);
+      return;
+    }
+
+    setSavingId(person.id);
+    setError("");
+
     const activeSession = await ensureTrainingSession();
 
     if (!activeSession) {
@@ -529,8 +529,7 @@ export default function Home() {
       return;
     }
 
-    const attendanceType =
-      person.type === "gæst" ? "prøvetime" : (person.balance ?? 0) > 0 ? "normal" : "kredit";
+    const attendanceType = person.type === "gæst" ? "prøvetime" : "normal";
 
     const { error: attendanceError } = await supabase.rpc(
       "register_attendance_for_session",
@@ -551,7 +550,7 @@ export default function Home() {
     await loadAttendancePage();
   }
 
-  async function registerGuestPayment(person: Person) {
+  async function registerPayment(person: Person) {
     setSavingId(person.id);
     setError("");
 
@@ -559,7 +558,10 @@ export default function Home() {
       p_person_id: person.id,
       p_amount_ore: 37500,
       p_clips: 10,
-      p_note: "10 klip efter gratis prøvetime",
+      p_note:
+        person.type === "gæst"
+          ? "10 klip efter gratis prøvetime"
+          : "Nyt klippekort med 10 klip",
     });
 
     if (paymentError) {
@@ -592,6 +594,10 @@ export default function Home() {
 
   async function addGuest(name: string) {
     setError("");
+
+    if (people.some((person) => normalizedName(person.name) === normalizedName(name))) {
+      return `${name} står allerede på deltagerlisten.`;
+    }
 
     const activeSession = await ensureTrainingSession();
     if (!activeSession) return "Træningsgangen kunne ikke oprettes.";
@@ -689,11 +695,13 @@ export default function Home() {
               {sortedPeople.map((person) => {
                 const checked = checkedIds.has(person.id);
                 const saving = savingId === person.id;
-                const needsPayment = guestNeedsPayment(
+                const needsPayment = personNeedsPayment(
                   person,
                   guestTrialDates[person.id],
                   sessionDate,
                 );
+                const hasLowBalance =
+                  person.type === "medlem" && (person.balance ?? 0) <= 1;
 
                 return (
                   <button
@@ -723,7 +731,13 @@ export default function Home() {
                       {person.name}
                     </span>
 
-                    <span className="whitespace-nowrap text-sm font-bold text-[#526960] sm:text-base">
+                    <span
+                      className={`whitespace-nowrap text-sm font-bold sm:text-base ${
+                        needsPayment || hasLowBalance
+                          ? "text-[#b42318]"
+                          : "text-[#526960]"
+                      }`}
+                    >
                       {saving
                         ? "…"
                         : statusText(
@@ -748,10 +762,10 @@ export default function Home() {
       )}
 
       {paymentPerson && (
-        <GuestPayment
+        <PaymentDialog
           person={paymentPerson}
           onClose={() => setPaymentPerson(null)}
-          onConfirm={registerGuestPayment}
+          onConfirm={registerPayment}
           onRemove={removeGuest}
         />
       )}
@@ -828,7 +842,7 @@ function AddGuest({
   );
 }
 
-function GuestPayment({
+function PaymentDialog({
   person,
   onClose,
   onConfirm,
@@ -905,14 +919,16 @@ function GuestPayment({
           {busy ? "Gemmer…" : "MobilePay modtaget"}
         </button>
 
-        <button
-          type="button"
-          onClick={confirmRemoval}
-          disabled={busy}
-          className="mt-3 min-h-12 w-full rounded-xl px-4 font-bold text-[#8d342d] disabled:opacity-40"
-        >
-          Fjern fra listen
-        </button>
+        {person.type === "gæst" && (
+          <button
+            type="button"
+            onClick={confirmRemoval}
+            disabled={busy}
+            className="mt-3 min-h-12 w-full rounded-xl px-4 font-bold text-[#8d342d] disabled:opacity-40"
+          >
+            Fjern fra listen
+          </button>
+        )}
       </div>
     </div>
   );
