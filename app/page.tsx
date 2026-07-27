@@ -8,7 +8,7 @@ type Person = {
   name: string;
   type: "gæst" | "medlem";
   balance: number | null;
-  payment_status: "ok" | "skal_betale" | "blokeret";
+  payment_status: "ok" | "skal_betale";
   created_at: string;
 };
 
@@ -38,70 +38,6 @@ const LEGACY_DEMO_GUESTS = new Set([
   "sofie (gæst)",
 ]);
 const LEGACY_DEMO_GUEST_CUTOFF = new Date("2026-07-26T18:00:00Z").getTime();
-
-type DemoPerson = {
-  name: string;
-  type: "medlem";
-  balance: number;
-  payment_status: "ok";
-};
-
-function demoPerson(name: string, balance: number): DemoPerson {
-  return { name, type: "medlem", balance, payment_status: "ok" };
-}
-
-const DEMO_ROSTERS: Record<string, DemoPerson[]> = {
-  "1-17:00": [
-    demoPerson("Anna Madsen", 8),
-    demoPerson("Birgit Holm", 5),
-    demoPerson("Camilla Friis", 2),
-    demoPerson("Dorte Larsen", 10),
-    demoPerson("Eva Nielsen", 6),
-    demoPerson("Freja Bach", 7),
-    demoPerson("Helle Møller", 4),
-    demoPerson("Ida Thomsen", 9),
-    demoPerson("Karen Sørensen", 6),
-    demoPerson("Lene Andersen", 3),
-  ],
-  "1-18:00": [
-    demoPerson("Gitte Jensen", 9),
-    demoPerson("Heidi Lund", 6),
-    demoPerson("Jannie Kjær", 4),
-    demoPerson("Lone Pedersen", 8),
-    demoPerson("Mette Dahl", 3),
-    demoPerson("Naja Poulsen", 10),
-    demoPerson("Rikke Brandt", 5),
-    demoPerson("Signe Vester", 7),
-    demoPerson("Tina Krogh", 2),
-    demoPerson("Ulla Knudsen", 6),
-  ],
-  "4-17:30": [
-    demoPerson("Alberte Hansen", 7),
-    demoPerson("Bodil Mikkelsen", 4),
-    demoPerson("Cecilie Falk", 9),
-    demoPerson("Ditmar Olsen", 5),
-    demoPerson("Emilie Bruun", 8),
-    demoPerson("Finn Lauritsen", 3),
-    demoPerson("Grethe Friis", 10),
-    demoPerson("Henrik Storm", 6),
-    demoPerson("Inge Dahl", 2),
-    demoPerson("Jesper Madsen", 7),
-  ],
-  "7-09:00": [
-    demoPerson("Kirsten Holm", 8),
-    demoPerson("Lars Winther", 5),
-    demoPerson("Maria Bach", 10),
-    demoPerson("Niels Jensen", 4),
-    demoPerson("Olivia Larsen", 6),
-    demoPerson("Pernille Skov", 9),
-    demoPerson("Rasmus Kjær", 3),
-    demoPerson("Susanne Lund", 7),
-    demoPerson("Thomas Berg", 5),
-    demoPerson("Vibeke Poulsen", 8),
-  ],
-};
-
-const DEMO_PEOPLE = Object.values(DEMO_ROSTERS).flat();
 
 function normalizedName(value: string) {
   return value.trim().toLocaleLowerCase("da-DK");
@@ -225,16 +161,35 @@ function statusText(
 }
 
 function friendlyError(message: string) {
+  console.error("Træningssjov databasefejl:", message);
+
   if (/permission denied|row-level security/i.test(message)) {
     return "Databasen er ikke færdigopsat endnu.";
   }
   if (/failed to fetch|network/i.test(message)) {
     return "Forbindelsen til databasen fejlede. Prøv igen.";
   }
-  if (/register_payment|remove_unpaid_guest|schema cache|could not find the function/i.test(message)) {
+  if (/person_already_exists|duplicate person/i.test(message)) {
+    return "Personen står allerede på deltagerlisten.";
+  }
+  if (
+    /register_payment|remove_unpaid_guest|create_guest_for_session|schema cache|could not find the function/i.test(
+      message,
+    )
+  ) {
     return "Handlingen kunne ikke gemmes. Databasen mangler den nyeste opdatering.";
   }
-  return message;
+  return "Handlingen kunne ikke gemmes. Prøv igen.";
+}
+
+function isDuplicateAttendanceError(message: string) {
+  return /23505|duplicate key|attendance_person_session/i.test(message);
+}
+
+function isMissingCreateGuestFunction(message: string) {
+  return /create_guest_for_session.*(schema cache|could not find the function)|could not find the function.*create_guest_for_session/i.test(
+    message,
+  );
 }
 
 export default function Home() {
@@ -316,39 +271,9 @@ export default function Home() {
       return;
     }
 
-    let loadedPeople = ((peopleResult.data ?? []) as Person[]).filter(
+    const loadedPeople = ((peopleResult.data ?? []) as Person[]).filter(
       (person) => !isLegacyDemoGuest(person),
     );
-
-    const loadedNames = new Set(
-      loadedPeople.map((person) => normalizedName(person.name)),
-    );
-    const missingDemoPeople = DEMO_PEOPLE.filter(
-      (person) => !loadedNames.has(normalizedName(person.name)),
-    );
-
-    if (missingDemoPeople.length > 0) {
-      const { data: demoPeople, error: demoError } = await supabase
-        .from("people")
-        .insert(
-          missingDemoPeople.map((person) => ({
-            ...person,
-            privacy_notice_given_at: new Date().toISOString(),
-          })),
-        )
-        .select("id,name,type,balance,payment_status,created_at");
-
-      if (demoError) {
-        setError(friendlyError(demoError.message));
-        setPageLoading(false);
-        return;
-      }
-
-      loadedPeople = [
-        ...loadedPeople,
-        ...((demoPeople ?? []) as Person[]),
-      ];
-    }
 
     const foundSession = (sessionResult.data ?? null) as TrainingSession | null;
     const trialRows = (trialResult.data ?? []) as TrialAttendance[];
@@ -575,6 +500,11 @@ export default function Home() {
     setSavingId(null);
 
     if (attendanceError) {
+      if (isDuplicateAttendanceError(attendanceError.message)) {
+        await loadAttendancePage();
+        return;
+      }
+
       setError(friendlyError(attendanceError.message));
       return;
     }
@@ -636,30 +566,50 @@ export default function Home() {
     const activeSession = await ensureTrainingSession();
     if (!activeSession) return "Træningsgangen kunne ikke oprettes.";
 
-    const { data: newGuest, error: insertError } = await supabase
-      .from("people")
-      .insert({
-        name,
-        type: "gæst",
-        balance: null,
-        payment_status: "skal_betale",
-        privacy_notice_given_at: new Date().toISOString(),
-      })
-      .select("id,name,type,balance,payment_status,created_at")
-      .single();
-
-    if (insertError) return friendlyError(insertError.message);
-
-    const { error: attendanceError } = await supabase.rpc(
-      "register_attendance_for_session",
+    const { error: createError } = await supabase.rpc(
+      "create_guest_for_session",
       {
-        p_person_id: (newGuest as Person).id,
+        p_name: name,
         p_session_id: activeSession.id,
-        p_type: "prøvetime",
       },
     );
 
-    if (attendanceError) return friendlyError(attendanceError.message);
+    if (createError && !isMissingCreateGuestFunction(createError.message)) {
+      return friendlyError(createError.message);
+    }
+
+    if (createError) {
+      const { data: newGuest, error: insertError } = await supabase
+        .from("people")
+        .insert({
+          name,
+          type: "gæst",
+          balance: null,
+          payment_status: "skal_betale",
+          privacy_notice_given_at: new Date().toISOString(),
+        })
+        .select("id,name,type,balance,payment_status,created_at")
+        .single();
+
+      if (insertError) return friendlyError(insertError.message);
+
+      const guest = newGuest as Person;
+      const { error: attendanceError } = await supabase.rpc(
+        "register_attendance_for_session",
+        {
+          p_person_id: guest.id,
+          p_session_id: activeSession.id,
+          p_type: "prøvetime",
+        },
+      );
+
+      if (attendanceError) {
+        await supabase.rpc("remove_unpaid_guest", {
+          p_person_id: guest.id,
+        });
+        return friendlyError(attendanceError.message);
+      }
+    }
 
     await loadAttendancePage();
     return null;

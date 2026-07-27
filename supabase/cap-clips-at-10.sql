@@ -4,22 +4,42 @@
 begin;
 
 update public.people
-set balance = greatest(0, least(balance, 10)),
+set balance = null,
+    payment_status = 'skal_betale'::public.payment_status,
+    updated_at = now()
+where type = 'gæst'::public.person_type
+  and (
+    balance is not null
+    or payment_status <> 'skal_betale'::public.payment_status
+  );
+
+update public.people
+set balance = greatest(0, least(coalesce(balance, 0), 10)),
     payment_status = case
-      when greatest(0, least(balance, 10)) = 0
+      when greatest(0, least(coalesce(balance, 0), 10)) = 0
         then 'skal_betale'::public.payment_status
       else 'ok'::public.payment_status
     end,
     updated_at = now()
 where type = 'medlem'::public.person_type
-  and (balance < 0 or balance > 10);
+  and (balance is null or balance < 0 or balance > 10);
+
+alter table public.people
+  drop constraint if exists guest_balance_is_null;
 
 alter table public.people
   drop constraint if exists member_balance_between_zero_and_ten;
 
 alter table public.people
+  add constraint guest_balance_is_null check (
+    (type = 'gæst'::public.person_type and balance is null)
+    or
+    (type = 'medlem'::public.person_type and balance is not null)
+  );
+
+alter table public.people
   add constraint member_balance_between_zero_and_ten check (
-    type = 'gæst'::public.person_type or balance between 0 and 10
+    balance is null or balance between 0 and 10
   );
 
 create or replace function public.register_payment(
@@ -36,8 +56,8 @@ declare
   v_person public.people;
   v_payment public.payments;
 begin
-  if p_amount_ore <= 0 or p_clips <= 0 or p_clips > 10 then
-    raise exception 'Amount must be positive and clips must be between 1 and 10';
+  if p_amount_ore <> 37500 or p_clips <> 10 then
+    raise exception 'INVALID_CLIP_CARD';
   end if;
 
   select * into v_person
@@ -46,7 +66,14 @@ begin
   for update;
 
   if not found then
-    raise exception 'Person not found';
+    raise exception 'PERSON_NOT_FOUND';
+  end if;
+
+  if (
+    v_person.type = 'medlem'::public.person_type
+    and coalesce(v_person.balance, 0) > 0
+  ) then
+    raise exception 'PAYMENT_NOT_REQUIRED';
   end if;
 
   insert into public.payments(person_id, amount_ore, clips, note)
@@ -54,8 +81,8 @@ begin
   returning * into v_payment;
 
   update public.people
-  set type = 'medlem',
-      balance = p_clips,
+  set type = 'medlem'::public.person_type,
+      balance = 10,
       payment_status = 'ok'::public.payment_status,
       updated_at = now()
   where id = p_person_id;
@@ -99,7 +126,10 @@ begin
   delete from public.attendance
   where id = v_attendance.id;
 
-  if v_person.type = 'medlem' and v_attendance.type in ('normal', 'kredit') then
+  if (
+    v_person.type = 'medlem'::public.person_type
+    and v_attendance.type::text <> 'prøvetime'
+  ) then
     v_new_balance := least(coalesce(v_person.balance, 0) + 1, 10);
 
     update public.people

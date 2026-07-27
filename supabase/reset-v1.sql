@@ -71,10 +71,9 @@ as $$
 declare
   v_person public.people;
   v_payment public.payments;
-  v_new_balance integer;
 begin
-  if p_amount_ore <= 0 or p_clips <= 0 or p_clips > 10 then
-    raise exception 'Amount must be positive and clips must be between 1 and 10';
+  if p_amount_ore <> 37500 or p_clips <> 10 then
+    raise exception 'INVALID_CLIP_CARD';
   end if;
 
   select * into v_person
@@ -83,18 +82,23 @@ begin
   for update;
 
   if not found then
-    raise exception 'Person not found';
+    raise exception 'PERSON_NOT_FOUND';
+  end if;
+
+  if (
+    v_person.type = 'medlem'::public.person_type
+    and coalesce(v_person.balance, 0) > 0
+  ) then
+    raise exception 'PAYMENT_NOT_REQUIRED';
   end if;
 
   insert into public.payments(person_id, amount_ore, clips, note)
   values (p_person_id, p_amount_ore, p_clips, p_note)
   returning * into v_payment;
 
-  v_new_balance := p_clips;
-
   update public.people
-  set type = 'medlem',
-      balance = v_new_balance,
+  set type = 'medlem'::public.person_type,
+      balance = 10,
       payment_status = 'ok'::public.payment_status,
       updated_at = now()
   where id = p_person_id;
@@ -113,10 +117,17 @@ as $$
 declare
   v_deleted_id uuid;
 begin
-  delete from public.people
-  where id = p_person_id
-    and type = 'gæst'::public.person_type
-  returning id into v_deleted_id;
+  delete from public.people person
+  where person.id = p_person_id
+    and person.type = 'gæst'::public.person_type
+    and person.balance is null
+    and person.payment_status = 'skal_betale'::public.payment_status
+    and not exists (
+      select 1
+      from public.payments payment
+      where payment.person_id = person.id
+    )
+  returning person.id into v_deleted_id;
 
   return v_deleted_id is not null;
 end;

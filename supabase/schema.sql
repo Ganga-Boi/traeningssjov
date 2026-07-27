@@ -1,8 +1,8 @@
 create extension if not exists pgcrypto;
 
 create type public.person_type as enum ('medlem', 'gæst');
-create type public.payment_status as enum ('ok', 'skal_betale', 'blokeret');
-create type public.attendance_type as enum ('normal', 'kredit', 'prøvetime');
+create type public.payment_status as enum ('ok', 'skal_betale');
+create type public.attendance_type as enum ('normal', 'prøvetime');
 
 create table public.people (
   id uuid primary key default gen_random_uuid(),
@@ -60,19 +60,40 @@ declare
   v_attendance public.attendance;
 begin
   select * into v_person from public.people where id = p_person_id for update;
-  if not found then raise exception 'Person not found'; end if;
+  if not found then raise exception 'PERSON_NOT_FOUND'; end if;
+
+  select * into v_attendance
+  from public.attendance
+  where person_id = p_person_id
+    and session_key = p_session_key;
+
+  if found then
+    return v_attendance;
+  end if;
+
+  if v_person.type = 'medlem'::public.person_type then
+    if p_type::text <> 'normal' then
+      raise exception 'ATTENDANCE_TYPE_NOT_ALLOWED';
+    end if;
+
+    if v_person.balance is null or v_person.balance <= 0 then
+      raise exception 'PAYMENT_REQUIRED';
+    end if;
+  elsif p_type::text <> 'prøvetime' then
+    raise exception 'ATTENDANCE_TYPE_NOT_ALLOWED';
+  end if;
 
   insert into public.attendance(person_id, session_key, type)
   values (p_person_id, p_session_key, p_type)
   returning * into v_attendance;
 
-  if v_person.type = 'medlem' and p_type in ('normal', 'kredit') then
+  if v_person.type = 'medlem'::public.person_type then
     update public.people
-    set balance = balance - 1,
+    set balance = v_person.balance - 1,
         payment_status = case
-          when balance - 1 < 0 then 'blokeret'::public.payment_status
-          when balance - 1 = 0 then 'skal_betale'::public.payment_status
-          else payment_status
+          when v_person.balance - 1 = 0
+            then 'skal_betale'::public.payment_status
+          else 'ok'::public.payment_status
         end,
         updated_at = now()
     where id = p_person_id;
@@ -93,23 +114,35 @@ security definer
 set search_path = public
 as $$
 declare
+  v_person public.people;
   v_payment public.payments;
 begin
-  if p_amount_ore <= 0 or p_clips <= 0 or p_clips > 10 then
-    raise exception 'Amount must be positive and clips must be between 1 and 10';
+  if p_amount_ore <> 37500 or p_clips <> 10 then
+    raise exception 'INVALID_CLIP_CARD';
   end if;
 
-  perform 1 from public.people where id = p_person_id for update;
-  if not found then raise exception 'Person not found'; end if;
+  select * into v_person
+  from public.people
+  where id = p_person_id
+  for update;
+
+  if not found then raise exception 'PERSON_NOT_FOUND'; end if;
+
+  if (
+    v_person.type = 'medlem'::public.person_type
+    and coalesce(v_person.balance, 0) > 0
+  ) then
+    raise exception 'PAYMENT_NOT_REQUIRED';
+  end if;
 
   insert into public.payments(person_id, amount_ore, clips, note)
   values (p_person_id, p_amount_ore, p_clips, p_note)
   returning * into v_payment;
 
   update public.people
-  set type = 'medlem',
-      balance = p_clips,
-      payment_status = 'ok',
+  set type = 'medlem'::public.person_type,
+      balance = 10,
+      payment_status = 'ok'::public.payment_status,
       updated_at = now()
   where id = p_person_id;
 

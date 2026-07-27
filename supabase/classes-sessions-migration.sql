@@ -68,36 +68,74 @@ security definer
 set search_path = public
 as $$
 declare
+  v_session public.sessions;
   v_person public.people;
   v_attendance public.attendance;
-  v_status text;
+  v_new_balance integer;
 begin
-  select status into v_status
+  select * into v_session
   from public.sessions
   where id = p_session_id
   for update;
 
-  if not found then raise exception 'Session not found'; end if;
-  if v_status = 'aflyst' then raise exception 'Session is cancelled'; end if;
+  if not found then raise exception 'SESSION_NOT_FOUND'; end if;
+  if v_session.status = 'aflyst' then raise exception 'SESSION_CANCELLED'; end if;
 
   select * into v_person
   from public.people
   where id = p_person_id
   for update;
 
-  if not found then raise exception 'Person not found'; end if;
+  if not found then raise exception 'PERSON_NOT_FOUND'; end if;
+
+  select * into v_attendance
+  from public.attendance
+  where person_id = p_person_id
+    and session_id = p_session_id;
+
+  if found then
+    return v_attendance;
+  end if;
+
+  if v_person.type = 'medlem'::public.person_type then
+    if p_type::text <> 'normal' then
+      raise exception 'ATTENDANCE_TYPE_NOT_ALLOWED';
+    end if;
+
+    if v_person.balance is null or v_person.balance <= 0 then
+      raise exception 'PAYMENT_REQUIRED';
+    end if;
+  else
+    if p_type::text <> 'prøvetime' then
+      raise exception 'ATTENDANCE_TYPE_NOT_ALLOWED';
+    end if;
+
+    if exists (
+      select 1
+      from public.attendance previous_attendance
+      join public.sessions previous_session
+        on previous_session.id = previous_attendance.session_id
+      where previous_attendance.person_id = p_person_id
+        and previous_attendance.type::text = 'prøvetime'
+        and previous_session.session_date < v_session.session_date
+    ) then
+      raise exception 'PAYMENT_REQUIRED';
+    end if;
+  end if;
 
   insert into public.attendance(person_id, session_id, session_key, type)
   values (p_person_id, p_session_id, 'session:' || p_session_id::text, p_type)
   returning * into v_attendance;
 
-  if v_person.type = 'medlem' and p_type in ('normal', 'kredit') then
+  if v_person.type = 'medlem'::public.person_type then
+    v_new_balance := v_person.balance - 1;
+
     update public.people
-    set balance = balance - 1,
+    set balance = v_new_balance,
         payment_status = case
-          when balance - 1 < 0 then 'blokeret'::public.payment_status
-          when balance - 1 = 0 then 'skal_betale'::public.payment_status
-          else payment_status
+          when v_new_balance = 0
+            then 'skal_betale'::public.payment_status
+          else 'ok'::public.payment_status
         end,
         updated_at = now()
     where id = p_person_id;
