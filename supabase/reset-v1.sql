@@ -7,6 +7,57 @@ begin;
 alter table public.people
   add column if not exists privacy_notice_given_at timestamptz;
 
+-- Ældre Træningssjov-databaser brugte amount (kroner) og clip_count.
+-- Migrér dem til det nuværende skema uden at slette betalingshistorik.
+do $
+begin
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'payments'
+      and column_name = 'amount'
+  ) and not exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'payments'
+      and column_name = 'amount_ore'
+  ) then
+    alter table public.payments rename column amount to amount_ore;
+  end if;
+
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'payments'
+      and column_name = 'amount_ore'
+      and data_type = 'numeric'
+  ) then
+    alter table public.payments
+      alter column amount_ore type integer
+      using round(amount_ore * 100)::integer;
+  end if;
+
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'payments'
+      and column_name = 'clip_count'
+  ) and not exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'payments'
+      and column_name = 'clips'
+  ) then
+    alter table public.payments rename column clip_count to clips;
+  end if;
+end;
+$;
+
 create or replace function public.register_payment(
   p_person_id uuid,
   p_amount_ore integer default 37500,
