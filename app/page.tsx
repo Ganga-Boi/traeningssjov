@@ -63,6 +63,35 @@ function status(person: Person) {
   return `${person.balance} klip`;
 }
 
+function normalizedName(value: string) {
+  return value.trim().toLocaleLowerCase("da-DK");
+}
+
+function preferredPerson(existing: Person, candidate: Person) {
+  if (existing.type !== candidate.type) {
+    return existing.type === "medlem" ? existing : candidate;
+  }
+
+  if (existing.payment_status !== candidate.payment_status) {
+    if (existing.payment_status === "blokeret") return existing;
+    if (candidate.payment_status === "blokeret") return candidate;
+  }
+
+  return (candidate.balance ?? -2) > (existing.balance ?? -2) ? candidate : existing;
+}
+
+function uniquePeople(items: Person[]) {
+  const byName = new Map<string, Person>();
+
+  for (const person of items) {
+    const key = normalizedName(person.name);
+    const existing = byName.get(key);
+    byName.set(key, existing ? preferredPerson(existing, person) : person);
+  }
+
+  return [...byName.values()];
+}
+
 export default function Home() {
   const [classes, setClasses] = useState<TrainingClass[]>([]);
   const [classIndex, setClassIndex] = useState(0);
@@ -107,7 +136,7 @@ export default function Home() {
     if (peopleResult.error) return setError(peopleResult.error.message);
     if (sessionResult.error) return setError(sessionResult.error.message);
 
-    setPeople((peopleResult.data ?? []) as Person[]);
+    setPeople(uniquePeople((peopleResult.data ?? []) as Person[]));
     const found = (sessionResult.data ?? null) as TrainingSession | null;
     setSession(found);
 
@@ -150,7 +179,6 @@ export default function Home() {
 
   async function toggle(person: Person) {
     if (busyId) return;
-
     if (person.type === "medlem" && (person.balance ?? 0) <= 0) return;
 
     setBusyId(person.id);
@@ -196,7 +224,7 @@ export default function Home() {
     const clean = name.trim();
     if (!clean) return "Navn mangler";
 
-    const exists = people.some((person) => person.name.localeCompare(clean, "da", { sensitivity: "base" }) === 0);
+    const exists = people.some((person) => normalizedName(person.name) === normalizedName(clean));
     if (exists) return "Personen står allerede på listen";
 
     const result = await supabase.from("people").insert({
