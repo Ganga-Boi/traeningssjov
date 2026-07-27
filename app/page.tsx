@@ -221,6 +221,11 @@ export default function Home() {
   const [recentlyPaidId, setRecentlyPaidId] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
 
+  // RETTET: historiske dage (dage før i dag) skal være skrivebeskyttede.
+  // Uden dette kan et fejlklik på en gammel dag ændre den rigtige historik,
+  // enten ved at slette et ægte fremmøde eller oprette et falsk et.
+  const isReadOnlyView = isHistoricalDate(sessionDate);
+
   const loadClasses = useCallback(async () => {
     const { data, error: classError } = await supabase
       .from("classes")
@@ -495,6 +500,9 @@ export default function Home() {
   }, [notice]);
 
   async function toggleAttendance(person: Person) {
+    // RETTET: blokerer alle ændringer, når man kigger på en historisk dag.
+    // Historiske fremmøder må ikke kunne ændres ved et fejlklik.
+    if (isReadOnlyView) return;
     if (savingId || trainingSession?.status === "aflyst") return;
 
     if (checkedIds.has(person.id)) {
@@ -713,6 +721,13 @@ export default function Home() {
           Dato: <span className="text-[#18322b]">{displayDate(sessionDate)}</span>
         </p>
 
+        {/* RETTET: tydelig visuel markering af, at man kigger på historik og ikke kan redigere */}
+        {isReadOnlyView && (
+          <div className="mt-3 rounded-xl bg-[#eef1ee] p-3 text-sm font-bold text-[#526960]">
+            Historisk visning · kan ikke ændres
+          </div>
+        )}
+
         {error && <ErrorBox message={error} />}
         {notice && (
           <div className="mt-4 rounded-xl bg-[#e6f4ec] p-4 text-sm font-bold text-[#176247]">
@@ -720,13 +735,16 @@ export default function Home() {
           </div>
         )}
 
-        <button
-          type="button"
-          onClick={() => setAddingGuest(true)}
-          className="mt-5 min-h-12 rounded-xl px-2 text-base font-black text-[#28755d] active:bg-[#e4ebe6]"
-        >
-          + Gæst
-        </button>
+        {/* RETTET: "+ Gæst" skal ikke kunne bruges på en historisk dag */}
+        {!isReadOnlyView && (
+          <button
+            type="button"
+            onClick={() => setAddingGuest(true)}
+            className="mt-5 min-h-12 rounded-xl px-2 text-base font-black text-[#28755d] active:bg-[#e4ebe6]"
+          >
+            + Gæst
+          </button>
+        )}
 
         <section
           aria-busy={pageLoading}
@@ -758,7 +776,7 @@ export default function Home() {
                     onClick={() =>
                       toggleAttendance(currentPeopleById.get(person.id) ?? person)
                     }
-                    disabled={Boolean(savingId) || pageLoading}
+                    disabled={Boolean(savingId) || pageLoading || isReadOnlyView}
                     aria-pressed={checked}
                     className={`grid min-h-16 w-full grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 text-left transition ${
                       recentlyPaid
@@ -766,7 +784,7 @@ export default function Home() {
                         : checked
                           ? "bg-[#eef1ee] opacity-45"
                           : "bg-white active:bg-[#f1f5f2]"
-                    }`}
+                    } ${isReadOnlyView ? "cursor-default" : ""}`}
                   >
                     <span
                       aria-hidden="true"
