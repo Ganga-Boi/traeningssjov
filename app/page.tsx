@@ -28,7 +28,7 @@ type TrainingSession = {
 
 type Attendance = { person_id: string };
 type TrialAttendance = { person_id: string; session_id: string | null };
-type TrialSession = { id: string; session_date: string };
+type TrialSession = { id: string; session_date: string; class_id: string };
 
 const supabase = getSupabaseBrowserClient();
 
@@ -39,68 +39,77 @@ const LEGACY_DEMO_GUESTS = new Set([
 ]);
 const LEGACY_DEMO_GUEST_CUTOFF = new Date("2026-07-26T18:00:00Z").getTime();
 
-const DEMO_PEOPLE = [
-  {
-    name: "Anna Madsen",
-    type: "medlem" as const,
-    balance: 8,
-    payment_status: "ok" as const,
-  },
-  {
-    name: "Birgit Holm",
-    type: "medlem" as const,
-    balance: 5,
-    payment_status: "ok" as const,
-  },
-  {
-    name: "Camilla Friis",
-    type: "medlem" as const,
-    balance: 2,
-    payment_status: "ok" as const,
-  },
-  {
-    name: "Dorte Larsen",
-    type: "medlem" as const,
-    balance: 10,
-    payment_status: "ok" as const,
-  },
-  {
-    name: "Eva Nielsen",
-    type: "medlem" as const,
-    balance: 0,
-    payment_status: "skal_betale" as const,
-  },
-  {
-    name: "Freja Bach",
-    type: "medlem" as const,
-    balance: 7,
-    payment_status: "ok" as const,
-  },
-  {
-    name: "Helle Møller",
-    type: "medlem" as const,
-    balance: 4,
-    payment_status: "ok" as const,
-  },
-  {
-    name: "Ida Thomsen",
-    type: "medlem" as const,
-    balance: 9,
-    payment_status: "ok" as const,
-  },
-  {
-    name: "Karen Sørensen",
-    type: "medlem" as const,
-    balance: 6,
-    payment_status: "ok" as const,
-  },
-  {
-    name: "Lene Andersen",
-    type: "medlem" as const,
-    balance: 3,
-    payment_status: "ok" as const,
-  },
-];
+type DemoPerson = {
+  name: string;
+  type: "medlem";
+  balance: number;
+  payment_status: "ok";
+};
+
+function demoPerson(name: string, balance: number): DemoPerson {
+  return { name, type: "medlem", balance, payment_status: "ok" };
+}
+
+const DEMO_ROSTERS: Record<string, DemoPerson[]> = {
+  "1-17:00": [
+    demoPerson("Anna Madsen", 8),
+    demoPerson("Birgit Holm", 5),
+    demoPerson("Camilla Friis", 2),
+    demoPerson("Dorte Larsen", 10),
+    demoPerson("Eva Nielsen", 6),
+    demoPerson("Freja Bach", 7),
+    demoPerson("Helle Møller", 4),
+    demoPerson("Ida Thomsen", 9),
+    demoPerson("Karen Sørensen", 6),
+    demoPerson("Lene Andersen", 3),
+  ],
+  "1-18:00": [
+    demoPerson("Gitte Jensen", 9),
+    demoPerson("Heidi Lund", 6),
+    demoPerson("Jannie Kjær", 4),
+    demoPerson("Lone Pedersen", 8),
+    demoPerson("Mette Dahl", 3),
+    demoPerson("Naja Poulsen", 10),
+    demoPerson("Rikke Brandt", 5),
+    demoPerson("Signe Vester", 7),
+    demoPerson("Tina Krogh", 2),
+    demoPerson("Ulla Knudsen", 6),
+  ],
+  "4-17:30": [
+    demoPerson("Alberte Hansen", 7),
+    demoPerson("Bodil Mikkelsen", 4),
+    demoPerson("Cecilie Falk", 9),
+    demoPerson("Ditmar Olsen", 5),
+    demoPerson("Emilie Bruun", 8),
+    demoPerson("Finn Lauritsen", 3),
+    demoPerson("Grethe Friis", 10),
+    demoPerson("Henrik Storm", 6),
+    demoPerson("Inge Dahl", 2),
+    demoPerson("Jesper Madsen", 7),
+  ],
+  "7-09:00": [
+    demoPerson("Kirsten Holm", 8),
+    demoPerson("Lars Winther", 5),
+    demoPerson("Maria Bach", 10),
+    demoPerson("Niels Jensen", 4),
+    demoPerson("Olivia Larsen", 6),
+    demoPerson("Pernille Skov", 9),
+    demoPerson("Rasmus Kjær", 3),
+    demoPerson("Susanne Lund", 7),
+    demoPerson("Thomas Berg", 5),
+    demoPerson("Vibeke Poulsen", 8),
+  ],
+};
+
+const DEMO_PEOPLE = Object.values(DEMO_ROSTERS).flat();
+
+function normalizedName(value: string) {
+  return value.trim().toLocaleLowerCase("da-DK");
+}
+
+function rosterKey(trainingClass: TrainingClass) {
+  return `${trainingClass.weekday}-${trainingClass.start_time.slice(0, 5)}`;
+}
 
 function localDateValue(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -200,6 +209,7 @@ export default function Home() {
   const [people, setPeople] = useState<Person[]>([]);
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const [guestTrialDates, setGuestTrialDates] = useState<Record<string, string>>({});
+  const [trialClassIds, setTrialClassIds] = useState<Record<string, string[]>>({});
   const [error, setError] = useState("");
   const [addingGuest, setAddingGuest] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -271,11 +281,18 @@ export default function Home() {
       (person) => !isLegacyDemoGuest(person),
     );
 
-    if (loadedPeople.length === 0) {
+    const loadedNames = new Set(
+      loadedPeople.map((person) => normalizedName(person.name)),
+    );
+    const missingDemoPeople = DEMO_PEOPLE.filter(
+      (person) => !loadedNames.has(normalizedName(person.name)),
+    );
+
+    if (missingDemoPeople.length > 0) {
       const { data: demoPeople, error: demoError } = await supabase
         .from("people")
         .insert(
-          DEMO_PEOPLE.map((person) => ({
+          missingDemoPeople.map((person) => ({
             ...person,
             privacy_notice_given_at: new Date().toISOString(),
           })),
@@ -288,7 +305,10 @@ export default function Home() {
         return;
       }
 
-      loadedPeople = (demoPeople ?? []) as Person[];
+      loadedPeople = [
+        ...loadedPeople,
+        ...((demoPeople ?? []) as Person[]),
+      ];
     }
 
     const foundSession = (sessionResult.data ?? null) as TrainingSession | null;
@@ -305,7 +325,7 @@ export default function Home() {
     if (trialSessionIds.length > 0) {
       const { data, error: trialSessionError } = await supabase
         .from("sessions")
-        .select("id,session_date")
+        .select("id,session_date,class_id")
         .in("id", trialSessionIds);
 
       if (trialSessionError) {
@@ -320,11 +340,16 @@ export default function Home() {
     const sessionDatesById = new Map(
       trialSessions.map((session) => [session.id, session.session_date]),
     );
+    const classIdsBySessionId = new Map(
+      trialSessions.map((session) => [session.id, session.class_id]),
+    );
     const nextTrialDates: Record<string, string> = {};
+    const nextTrialClassIds: Record<string, string[]> = {};
 
     for (const row of trialRows) {
       if (!row.session_id) continue;
       const trialDate = sessionDatesById.get(row.session_id);
+      const trialClassId = classIdsBySessionId.get(row.session_id);
       if (
         trialDate &&
         (!nextTrialDates[row.person_id] ||
@@ -332,11 +357,21 @@ export default function Home() {
       ) {
         nextTrialDates[row.person_id] = trialDate;
       }
+      if (
+        trialClassId &&
+        !nextTrialClassIds[row.person_id]?.includes(trialClassId)
+      ) {
+        nextTrialClassIds[row.person_id] = [
+          ...(nextTrialClassIds[row.person_id] ?? []),
+          trialClassId,
+        ];
+      }
     }
 
     setPeople(loadedPeople);
     setTrainingSession(foundSession);
     setGuestTrialDates(nextTrialDates);
+    setTrialClassIds(nextTrialClassIds);
 
     if (!foundSession) {
       setCheckedIds(new Set());
@@ -411,7 +446,26 @@ export default function Home() {
   }
 
   const sortedPeople = useMemo(() => {
-    return [...people].sort((a, b) => {
+    if (!selectedClass) return [];
+
+    const fixedRosterNames = new Set(
+      (DEMO_ROSTERS[rosterKey(selectedClass)] ?? []).map((person) =>
+        normalizedName(person.name),
+      ),
+    );
+    const visiblePeople = people.filter(
+      (person) => {
+        const isFixedMember = fixedRosterNames.has(normalizedName(person.name));
+        const trialDate = guestTrialDates[person.id];
+        const joinedThisClass =
+          trialClassIds[person.id]?.includes(selectedClass.id) &&
+          Boolean(trialDate && sessionDate >= trialDate);
+
+        return isFixedMember || joinedThisClass;
+      },
+    );
+
+    return visiblePeople.sort((a, b) => {
       if (a.type !== b.type) return a.type === "gæst" ? -1 : 1;
       if (a.type === "gæst" && b.type === "gæst") {
         return (
@@ -420,7 +474,7 @@ export default function Home() {
       }
       return a.name.localeCompare(b.name, "da");
     });
-  }, [people]);
+  }, [guestTrialDates, people, selectedClass, sessionDate, trialClassIds]);
 
   async function toggleAttendance(person: Person) {
     if (savingId || trainingSession?.status === "aflyst") return;
@@ -644,231 +698,3 @@ export default function Home() {
                     className={`grid min-h-16 w-full grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 text-left transition ${
                       checked ? "bg-[#eef1ee] opacity-45" : "bg-white active:bg-[#f1f5f2]"
                     }`}
-                  >
-                    <span
-                      aria-hidden="true"
-                      className={`flex h-7 w-7 items-center justify-center rounded-md border-2 text-base font-black ${
-                        checked
-                          ? "border-[#28755d] bg-[#28755d] text-white"
-                          : needsPayment
-                            ? "border-[#d0a155] bg-[#fff4df] text-[#8b5605]"
-                          : "border-[#aebdb5] bg-white text-transparent"
-                      }`}
-                    >
-                      {needsPayment ? "!" : "✓"}
-                    </span>
-
-                    <span className="min-w-0 truncate text-base font-bold sm:text-lg">
-                      {person.name}
-                    </span>
-
-                    <span className="whitespace-nowrap text-sm font-bold text-[#526960] sm:text-base">
-                      {saving
-                        ? "…"
-                        : statusText(
-                            person,
-                            guestTrialDates[person.id],
-                            sessionDate,
-                          )}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </section>
-      </div>
-
-      {addingGuest && (
-        <AddGuest
-          onClose={() => setAddingGuest(false)}
-          onSave={addGuest}
-        />
-      )}
-
-      {paymentPerson && (
-        <GuestPayment
-          person={paymentPerson}
-          onClose={() => setPaymentPerson(null)}
-          onConfirm={registerGuestPayment}
-          onRemove={removeGuest}
-        />
-      )}
-    </main>
-  );
-}
-
-function AddGuest({
-  onClose,
-  onSave,
-}: {
-  onClose: () => void;
-  onSave: (name: string) => Promise<string | null>;
-}) {
-  const [name, setName] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    const cleanName = name.trim();
-    if (!cleanName) return;
-
-    setBusy(true);
-    setError("");
-    const saveError = await onSave(cleanName);
-    setBusy(false);
-
-    if (saveError) {
-      setError(saveError);
-      return;
-    }
-
-    onClose();
-  }
-
-  return (
-    <div className="fixed inset-0 z-20 flex items-end bg-black/35 p-3 sm:items-center sm:justify-center">
-      <form
-        onSubmit={submit}
-        className="w-full rounded-2xl bg-white p-5 text-[#18322b] shadow-xl sm:max-w-sm"
-      >
-        <div className="flex items-center justify-between gap-4">
-          <h2 className="text-xl font-black">Tilføj gæst</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Luk"
-            className="h-11 w-11 rounded-xl text-3xl text-[#60756d]"
-          >
-            ×
-          </button>
-        </div>
-
-        <input
-          autoFocus
-          required
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          placeholder="Navn"
-          className="mt-4 min-h-14 w-full rounded-xl border border-[#bcc9c2] px-4 text-lg outline-none focus:border-[#28755d]"
-        />
-
-        {error && <p className="mt-3 text-sm font-semibold text-[#8d342d]">{error}</p>}
-
-        <button
-          disabled={busy || !name.trim()}
-          className="mt-4 min-h-14 w-full rounded-xl bg-[#28755d] px-4 font-black text-white disabled:opacity-40"
-        >
-          {busy ? "Gemmer…" : "Tilføj"}
-        </button>
-      </form>
-    </div>
-  );
-}
-
-function GuestPayment({
-  person,
-  onClose,
-  onConfirm,
-  onRemove,
-}: {
-  person: Person;
-  onClose: () => void;
-  onConfirm: (person: Person) => Promise<string | null>;
-  onRemove: (person: Person) => Promise<string | null>;
-}) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-
-  async function confirmPayment() {
-    setBusy(true);
-    setError("");
-    const paymentError = await onConfirm(person);
-    setBusy(false);
-
-    if (paymentError) {
-      setError(paymentError);
-      return;
-    }
-
-    onClose();
-  }
-
-  async function confirmRemoval() {
-    if (!window.confirm(`Fjern ${person.name} fra listen?`)) return;
-
-    setBusy(true);
-    setError("");
-    const removeError = await onRemove(person);
-    setBusy(false);
-
-    if (removeError) {
-      setError(removeError);
-      return;
-    }
-
-    onClose();
-  }
-
-  return (
-    <div className="fixed inset-0 z-20 flex items-end bg-black/35 p-3 sm:items-center sm:justify-center">
-      <div className="w-full rounded-2xl bg-white p-5 text-[#18322b] shadow-xl sm:max-w-sm">
-        <div className="flex items-center justify-between gap-4">
-          <h2 className="text-xl font-black">Skal betale 375 kr.</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={busy}
-            aria-label="Luk"
-            className="h-11 w-11 rounded-xl text-3xl text-[#60756d]"
-          >
-            ×
-          </button>
-        </div>
-
-        <p className="mt-3 text-base font-bold">{person.name}</p>
-        <p className="mt-1 text-sm text-[#60756d]">
-          Tryk først, når MobilePay er modtaget. Personen får 10 klip og
-          registreres bagefter som fremmødt på deltagerlisten.
-        </p>
-
-        {error && <p className="mt-3 text-sm font-semibold text-[#8d342d]">{error}</p>}
-
-        <button
-          type="button"
-          onClick={confirmPayment}
-          disabled={busy}
-          className="mt-4 min-h-14 w-full rounded-xl bg-[#28755d] px-4 font-black text-white disabled:opacity-40"
-        >
-          {busy ? "Gemmer…" : "MobilePay modtaget"}
-        </button>
-
-        <button
-          type="button"
-          onClick={confirmRemoval}
-          disabled={busy}
-          className="mt-3 min-h-12 w-full rounded-xl px-4 font-bold text-[#8d342d] disabled:opacity-40"
-        >
-          Fjern fra listen
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function ErrorBox({ message }: { message: string }) {
-  return (
-    <div className="mt-4 rounded-xl bg-[#fee9e5] p-4 text-sm font-semibold text-[#8d342d]">
-      {message}
-    </div>
-  );
-}
-
-function LoadingScreen() {
-  return (
-    <main className="flex min-h-screen items-center justify-center bg-[#f4f5f1] font-bold text-[#60756d]">
-      Indlæser…
-    </main>
-  );
-}
