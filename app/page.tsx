@@ -3,13 +3,14 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
+const supabase = getSupabaseBrowserClient();
+
 type Person = {
   id: string;
   name: string;
   type: "gæst" | "medlem";
   balance: number | null;
-  payment_status: "ok" | "skal_betale";
-  created_at: string;
+  payment_status: "ok" | "skal_betale" | "blokeret";
 };
 
 type TrainingClass = {
@@ -18,1006 +19,267 @@ type TrainingClass = {
   weekday: number;
   start_time: string;
   end_time: string;
-  sort_order: number;
 };
 
-type TrainingSession = {
-  id: string;
-  status: "planlagt" | "afholdt" | "aflyst";
-};
+type TrainingSession = { id: string; status: string };
 
-type Attendance = { person_id: string };
-type TrialAttendance = { person_id: string; session_id: string | null };
-type TrialSession = { id: string; session_date: string };
-type HistoricalPersonState = {
-  person_id: string;
-  person_type: Person["type"];
-  balance_after: number | null;
-};
-
-const supabase = getSupabaseBrowserClient();
-
-const LEGACY_DEMO_GUESTS = new Set([
-  "benny hansen",
-  "peter hansen",
-  "sofie (gæst)",
-]);
-const LEGACY_DEMO_GUEST_CUTOFF = new Date("2026-07-26T18:00:00Z").getTime();
-
-function normalizedName(value: string) {
-  return value.trim().toLocaleLowerCase("da-DK");
-}
-
-function clipBalance(person: Person) {
-  return Math.min(10, Math.max(0, person.balance ?? 0));
-}
-
-function localDateValue(date: Date) {
+function localDate(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
-function isHistoricalDate(value: string) {
-  return value < localDateValue(new Date());
-}
-
-function upcomingMonday() {
+function mondayDate() {
   const today = new Date();
-  const monday = new Date(today);
-  const daysUntilMonday = (8 - today.getDay()) % 7;
-  monday.setDate(today.getDate() + daysUntilMonday);
-  return localDateValue(monday);
+  const day = today.getDay() === 0 ? 7 : today.getDay();
+  const result = new Date(today);
+  result.setDate(today.getDate() + 1 - day);
+  return localDate(result);
 }
 
 function moveDate(value: string, days: number) {
   const date = new Date(`${value}T12:00:00`);
   date.setDate(date.getDate() + days);
-  return localDateValue(date);
+  return localDate(date);
 }
 
 function displayDate(value: string) {
-  const [year, month, day] = value.split("-");
-  return `${day}-${month}-${year}`;
+  const [y, m, d] = value.split("-");
+  return `${d}-${m}-${y}`;
 }
 
-function weekdayName(value: string) {
-  const name = new Intl.DateTimeFormat("da-DK", { weekday: "long" }).format(
-    new Date(`${value}T12:00:00`),
-  );
-  return name.charAt(0).toUpperCase() + name.slice(1);
+function time(value: string) {
+  const [h, m] = value.slice(0, 5).split(":");
+  return m === "00" ? String(Number(h)) : `${Number(h)}.${m}`;
 }
 
-function compactTime(value: string) {
-  const [hours, minutes] = value.slice(0, 5).split(":");
-  return minutes === "00" ? String(Number(hours)) : `${Number(hours)}.${minutes}`;
+function weekday(value: string) {
+  const text = new Intl.DateTimeFormat("da-DK", { weekday: "long" }).format(new Date(`${value}T12:00:00`));
+  return text[0].toUpperCase() + text.slice(1);
 }
 
-function classTitle(trainingClass: TrainingClass, sessionDate: string) {
-  return `${weekdayName(sessionDate)} ${compactTime(trainingClass.start_time)}–${compactTime(trainingClass.end_time)}`;
-}
-
-function sortTrainingClasses(items: TrainingClass[]) {
-  return [...items].sort(
-    (a, b) => a.weekday - b.weekday || a.start_time.localeCompare(b.start_time),
-  );
-}
-
-function isLegacyDemoGuest(person: Person) {
-  return (
-    person.type === "gæst" &&
-    LEGACY_DEMO_GUESTS.has(person.name.trim().toLocaleLowerCase("da-DK")) &&
-    new Date(person.created_at).getTime() < LEGACY_DEMO_GUEST_CUTOFF
-  );
-}
-
-function preferredDuplicate(a: Person, b: Person) {
-  if (a.type !== b.type) return a.type === "medlem" ? a : b;
-
-  if (a.type === "medlem") {
-    const balanceDifference = clipBalance(a) - clipBalance(b);
-    if (balanceDifference !== 0) return balanceDifference > 0 ? a : b;
-  }
-
-  return new Date(a.created_at).getTime() >= new Date(b.created_at).getTime()
-    ? a
-    : b;
-}
-
-function uniquePeopleByName(items: Person[]) {
-  const uniquePeople = new Map<string, Person>();
-
-  for (const person of items) {
-    const key = normalizedName(person.name);
-    const existing = uniquePeople.get(key);
-    uniquePeople.set(key, existing ? preferredDuplicate(existing, person) : person);
-  }
-
-  return [...uniquePeople.values()];
-}
-
-function guestNeedsPayment(
-  person: Person,
-  trialDate: string | undefined,
-  sessionDate: string,
-) {
-  return person.type === "gæst" && Boolean(trialDate && sessionDate > trialDate);
-}
-
-function personNeedsPayment(
-  person: Person,
-  trialDate: string | undefined,
-  sessionDate: string,
-) {
-  if (person.type === "gæst") {
-    return guestNeedsPayment(person, trialDate, sessionDate);
-  }
-
-  return clipBalance(person) <= 0;
-}
-
-function statusText(
-  person: Person,
-  trialDate: string | undefined,
-  sessionDate: string,
-) {
-  if (person.type === "gæst") {
-    return guestNeedsPayment(person, trialDate, sessionDate)
-      ? "Skal betale"
-      : "Gæst";
-  }
-  const balance = clipBalance(person);
-  if (balance <= 0) return "0 klip · betal";
-  return `${balance} klip`;
-}
-
-function friendlyError(message: string) {
-  console.error("Træningssjov databasefejl:", message);
-
-  if (/permission denied|row-level security/i.test(message)) {
-    return "Databasen er ikke færdigopsat endnu.";
-  }
-  if (/failed to fetch|network/i.test(message)) {
-    return "Forbindelsen til databasen fejlede. Prøv igen.";
-  }
-  if (/person_already_exists|duplicate person/i.test(message)) {
-    return "Personen står allerede på deltagerlisten.";
-  }
-  if (
-    /register_payment|remove_unpaid_guest|create_guest_for_session|schema cache|could not find the function/i.test(
-      message,
-    )
-  ) {
-    return "Handlingen kunne ikke gemmes. Databasen mangler den nyeste opdatering.";
-  }
-  return "Handlingen kunne ikke gemmes. Prøv igen.";
-}
-
-function isDuplicateAttendanceError(message: string) {
-  return /23505|duplicate key|attendance_person_session/i.test(message);
-}
-
-function isMissingCreateGuestFunction(message: string) {
-  return /create_guest_for_session.*(schema cache|could not find the function)|could not find the function.*create_guest_for_session/i.test(
-    message,
-  );
+function status(person: Person) {
+  if (person.type === "gæst") return "Gæst";
+  if (person.balance === -1 || person.payment_status === "blokeret") return "Kredit";
+  if ((person.balance ?? 0) === 0) return "0 klip · betal";
+  return `${person.balance} klip`;
 }
 
 export default function Home() {
-  const [loading, setLoading] = useState(true);
-  const [pageLoading, setPageLoading] = useState(false);
   const [classes, setClasses] = useState<TrainingClass[]>([]);
-  const [selectedClass, setSelectedClass] = useState<TrainingClass | null>(null);
-  const [sessionDate, setSessionDate] = useState(localDateValue(new Date()));
-  const [trainingSession, setTrainingSession] = useState<TrainingSession | null>(null);
+  const [classIndex, setClassIndex] = useState(0);
+  const [sessionDate, setSessionDate] = useState(mondayDate());
+  const [session, setSession] = useState<TrainingSession | null>(null);
   const [people, setPeople] = useState<Person[]>([]);
-  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
-  const [guestTrialDates, setGuestTrialDates] = useState<Record<string, string>>({});
-  const [historicalStates, setHistoricalStates] = useState<
-    Record<string, HistoricalPersonState>
-  >({});
+  const [checked, setChecked] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState(true);
+  const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [addingGuest, setAddingGuest] = useState(false);
-  const [savingId, setSavingId] = useState<string | null>(null);
-  const [paymentPerson, setPaymentPerson] = useState<Person | null>(null);
-  const [recentlyPaidId, setRecentlyPaidId] = useState<string | null>(null);
-  const [notice, setNotice] = useState("");
 
-  // RETTET: historiske dage (dage før i dag) skal være skrivebeskyttede.
-  // Uden dette kan et fejlklik på en gammel dag ændre den rigtige historik,
-  // enten ved at slette et ægte fremmøde eller oprette et falsk et.
-  const isReadOnlyView = isHistoricalDate(sessionDate);
+  const selectedClass = classes[classIndex] ?? null;
 
   const loadClasses = useCallback(async () => {
-    const { data, error: classError } = await supabase
+    const result = await supabase
       .from("classes")
-      .select("id,name,weekday,start_time,end_time,sort_order")
+      .select("id,name,weekday,start_time,end_time")
       .eq("active", true)
       .order("weekday")
       .order("start_time");
 
-    if (classError) {
-      setError(friendlyError(classError.message));
-    } else {
-      const loadedClasses = sortTrainingClasses((data ?? []) as TrainingClass[]);
-      setClasses(loadedClasses);
-
-      if (loadedClasses[0]) {
-        setPageLoading(true);
-        setSelectedClass(loadedClasses[0]);
-        setSessionDate(upcomingMonday());
-      }
-    }
-
+    if (result.error) setError(result.error.message);
+    else setClasses((result.data ?? []) as TrainingClass[]);
     setLoading(false);
   }, []);
 
-  const loadAttendancePage = useCallback(async () => {
+  const loadPage = useCallback(async () => {
     if (!selectedClass) return;
+    setError("");
 
-    const [peopleResult, sessionResult, trialResult] = await Promise.all([
-      supabase
-        .from("people")
-        .select("id,name,type,balance,payment_status,created_at")
-        .order("created_at"),
+    const [peopleResult, sessionResult] = await Promise.all([
+      supabase.from("people").select("id,name,type,balance,payment_status").order("name"),
       supabase
         .from("sessions")
         .select("id,status")
         .eq("class_id", selectedClass.id)
         .eq("session_date", sessionDate)
         .maybeSingle(),
-      supabase
-        .from("attendance")
-        .select("person_id,session_id")
-        .eq("type", "prøvetime"),
     ]);
 
-    if (peopleResult.error) {
-      setError(friendlyError(peopleResult.error.message));
-      setPageLoading(false);
-      return;
-    }
+    if (peopleResult.error) return setError(peopleResult.error.message);
+    if (sessionResult.error) return setError(sessionResult.error.message);
 
-    if (sessionResult.error) {
-      setError(friendlyError(sessionResult.error.message));
-      setPageLoading(false);
-      return;
-    }
+    setPeople((peopleResult.data ?? []) as Person[]);
+    const found = (sessionResult.data ?? null) as TrainingSession | null;
+    setSession(found);
 
-    if (trialResult.error) {
-      setError(friendlyError(trialResult.error.message));
-      setPageLoading(false);
-      return;
-    }
+    if (!found) return setChecked(new Set());
 
-    const loadedPeople = ((peopleResult.data ?? []) as Person[]).filter(
-      (person) => !isLegacyDemoGuest(person),
-    );
-    let visiblePeople = loadedPeople;
-    const nextHistoricalStates: Record<string, HistoricalPersonState> = {};
-
-    if (isHistoricalDate(sessionDate)) {
-      const { data, error: historyError } = await supabase.rpc(
-        "get_historical_people_state",
-        {
-          p_class_id: selectedClass.id,
-          p_session_date: sessionDate,
-        },
-      );
-
-      if (historyError) {
-        setError(friendlyError(historyError.message));
-      } else {
-        for (const row of (data ?? []) as HistoricalPersonState[]) {
-          nextHistoricalStates[row.person_id] = row;
-        }
-        visiblePeople = loadedPeople.filter(
-          (person) => nextHistoricalStates[person.id],
-        );
-      }
-    }
-
-    const foundSession = (sessionResult.data ?? null) as TrainingSession | null;
-    const trialRows = (trialResult.data ?? []) as TrialAttendance[];
-    const trialSessionIds = [
-      ...new Set(
-        trialRows
-          .map((row) => row.session_id)
-          .filter((id): id is string => Boolean(id)),
-      ),
-    ];
-    let trialSessions: TrialSession[] = [];
-
-    if (trialSessionIds.length > 0) {
-      const { data, error: trialSessionError } = await supabase
-        .from("sessions")
-        .select("id,session_date")
-        .in("id", trialSessionIds);
-
-      if (trialSessionError) {
-        setError(friendlyError(trialSessionError.message));
-        setPageLoading(false);
-        return;
-      }
-
-      trialSessions = (data ?? []) as TrialSession[];
-    }
-
-    const sessionDatesById = new Map(
-      trialSessions.map((session) => [session.id, session.session_date]),
-    );
-    const nextTrialDates: Record<string, string> = {};
-
-    for (const row of trialRows) {
-      if (!row.session_id) continue;
-      const trialDate = sessionDatesById.get(row.session_id);
-      if (
-        trialDate &&
-        (!nextTrialDates[row.person_id] ||
-          trialDate < nextTrialDates[row.person_id])
-      ) {
-        nextTrialDates[row.person_id] = trialDate;
-      }
-    }
-
-    setPeople(visiblePeople);
-    setHistoricalStates(nextHistoricalStates);
-    setTrainingSession(foundSession);
-    setGuestTrialDates(nextTrialDates);
-
-    if (!foundSession) {
-      setCheckedIds(new Set());
-      setPageLoading(false);
-      return;
-    }
-
-    const attendanceResult = await supabase
+    const attendance = await supabase
       .from("attendance")
       .select("person_id")
-      .eq("session_id", foundSession.id);
+      .eq("session_id", found.id);
 
-    if (attendanceResult.error) {
-      setError(friendlyError(attendanceResult.error.message));
-    } else {
-      setCheckedIds(
-        new Set(((attendanceResult.data ?? []) as Attendance[]).map((row) => row.person_id)),
-      );
-    }
-
-    setPageLoading(false);
+    if (attendance.error) return setError(attendance.error.message);
+    setChecked(new Set((attendance.data ?? []).map((row) => row.person_id)));
   }, [selectedClass, sessionDate]);
 
-  useEffect(() => {
-    const timeoutId = window.setTimeout(() => void loadClasses(), 0);
-    return () => window.clearTimeout(timeoutId);
-  }, [loadClasses]);
+  useEffect(() => { void loadClasses(); }, [loadClasses]);
+  useEffect(() => { void loadPage(); }, [loadPage]);
 
-  useEffect(() => {
-    const timeoutId = window.setTimeout(() => void loadAttendancePage(), 0);
-    return () => window.clearTimeout(timeoutId);
-  }, [loadAttendancePage]);
+  const sortedPeople = useMemo(() => [...people].sort((a, b) => {
+    if (a.type !== b.type) return a.type === "gæst" ? -1 : 1;
+    const aBalance = a.balance ?? -2;
+    const bBalance = b.balance ?? -2;
+    return bBalance - aBalance || a.name.localeCompare(b.name, "da");
+  }), [people]);
 
-  function changeTraining(direction: -1 | 1) {
-    if (!selectedClass || classes.length === 0) return;
-
-    const currentIndex = classes.findIndex((item) => item.id === selectedClass.id);
-    if (currentIndex < 0) return;
-
-    const targetIndex = (currentIndex + direction + classes.length) % classes.length;
-    const targetClass = classes[targetIndex];
-    const dayDifference =
-      direction === 1
-        ? (targetClass.weekday - selectedClass.weekday + 7) % 7
-        : -((selectedClass.weekday - targetClass.weekday + 7) % 7);
-
-    setPageLoading(true);
-    setError("");
-    setSelectedClass(targetClass);
-    setSessionDate(moveDate(sessionDate, dayDifference));
-    setTrainingSession(null);
-    setCheckedIds(new Set());
-  }
-
-  async function ensureTrainingSession() {
+  async function ensureSession() {
+    if (session) return session;
     if (!selectedClass) return null;
-    if (trainingSession) return trainingSession;
-
-    const { data, error: sessionError } = await supabase.rpc("get_or_create_session", {
+    const result = await supabase.rpc("get_or_create_session", {
       p_class_id: selectedClass.id,
       p_session_date: sessionDate,
     });
-
-    if (sessionError) {
-      setError(friendlyError(sessionError.message));
+    if (result.error) {
+      setError(result.error.message);
       return null;
     }
-
-    const createdSession = data as TrainingSession;
-    setTrainingSession(createdSession);
-    return createdSession;
+    const created = result.data as TrainingSession;
+    setSession(created);
+    return created;
   }
 
-  const sortedPeople = useMemo(() => {
-    if (!selectedClass) return [];
+  async function toggle(person: Person) {
+    if (busyId) return;
 
-    const visiblePeople = uniquePeopleByName(
-      people.map((person) => {
-        const historicalState = historicalStates[person.id];
-        if (!historicalState) return person;
+    if (person.type === "medlem" && (person.balance ?? 0) <= 0) return;
 
-        const balance = historicalState.balance_after;
-        return {
-          ...person,
-          type: historicalState.person_type,
-          balance,
-          payment_status:
-            historicalState.person_type === "gæst" || (balance ?? 0) <= 0
-              ? "skal_betale"
-              : "ok",
-        };
-      }),
-    );
-
-    return visiblePeople.sort((a, b) => {
-      if (a.type !== b.type) return a.type === "gæst" ? -1 : 1;
-      if (a.type === "gæst" && b.type === "gæst") {
-        return (
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        );
-      }
-
-      const balanceDifference = clipBalance(b) - clipBalance(a);
-      return balanceDifference || a.name.localeCompare(b.name, "da");
-    });
-  }, [historicalStates, people, selectedClass]);
-
-  const currentPeopleById = useMemo(
-    () => new Map(people.map((person) => [person.id, person])),
-    [people],
-  );
-
-  useEffect(() => {
-    if (!recentlyPaidId) return;
-
-    const scrollTimeout = window.setTimeout(() => {
-      document
-        .getElementById(`person-${recentlyPaidId}`)
-        ?.scrollIntoView({ behavior: "smooth", block: "center" });
-    }, 50);
-    const clearTimeout = window.setTimeout(() => {
-      setRecentlyPaidId(null);
-    }, 2500);
-
-    return () => {
-      window.clearTimeout(scrollTimeout);
-      window.clearTimeout(clearTimeout);
-    };
-  }, [recentlyPaidId]);
-
-  useEffect(() => {
-    if (!notice) return;
-
-    const timeoutId = window.setTimeout(() => setNotice(""), 3500);
-    return () => window.clearTimeout(timeoutId);
-  }, [notice]);
-
-  async function toggleAttendance(person: Person) {
-    // RETTET: blokerer alle ændringer, når man kigger på en historisk dag.
-    // Historiske fremmøder må ikke kunne ændres ved et fejlklik.
-    if (isReadOnlyView) return;
-    if (savingId || trainingSession?.status === "aflyst") return;
-
-    if (checkedIds.has(person.id)) {
-      setSavingId(person.id);
-      setError("");
-
-      if (!trainingSession) {
-        setSavingId(null);
-        return;
-      }
-
-      const { error: undoError } = await supabase.rpc("undo_attendance_for_session", {
-        p_person_id: person.id,
-        p_session_id: trainingSession.id,
-      });
-
-      setSavingId(null);
-
-      if (undoError) {
-        setError(friendlyError(undoError.message));
-        return;
-      }
-
-      await loadAttendancePage();
-      return;
-    }
-
-    if (
-      personNeedsPayment(
-        person,
-        guestTrialDates[person.id],
-        sessionDate,
-      )
-    ) {
-      setPaymentPerson(person);
-      return;
-    }
-
-    setSavingId(person.id);
+    setBusyId(person.id);
     setError("");
 
-    const activeSession = await ensureTrainingSession();
-
+    const activeSession = await ensureSession();
     if (!activeSession) {
-      setSavingId(null);
+      setBusyId(null);
       return;
     }
 
-    const attendanceType = person.type === "gæst" ? "prøvetime" : "normal";
+    const result = checked.has(person.id)
+      ? await supabase.rpc("undo_attendance_for_session", {
+          p_person_id: person.id,
+          p_session_id: activeSession.id,
+        })
+      : await supabase.rpc("register_attendance_for_session", {
+          p_person_id: person.id,
+          p_session_id: activeSession.id,
+          p_type: person.type === "gæst" ? "prøvetime" : "normal",
+        });
 
-    const { error: attendanceError } = await supabase.rpc(
-      "register_attendance_for_session",
-      {
-        p_person_id: person.id,
-        p_session_id: activeSession.id,
-        p_type: attendanceType,
-      },
-    );
-
-    setSavingId(null);
-
-    if (attendanceError) {
-      if (isDuplicateAttendanceError(attendanceError.message)) {
-        await loadAttendancePage();
-        return;
-      }
-
-      setError(friendlyError(attendanceError.message));
-      return;
-    }
-
-    await loadAttendancePage();
+    setBusyId(null);
+    if (result.error) return setError(result.error.message);
+    await loadPage();
   }
 
-  async function registerPayment(person: Person) {
-    setSavingId(person.id);
+  function changeClass(direction: -1 | 1) {
+    if (!selectedClass || classes.length === 0) return;
+    const nextIndex = (classIndex + direction + classes.length) % classes.length;
+    const nextClass = classes[nextIndex];
+    const delta = direction === 1
+      ? (nextClass.weekday - selectedClass.weekday + 7) % 7
+      : -((selectedClass.weekday - nextClass.weekday + 7) % 7);
+    setClassIndex(nextIndex);
+    setSessionDate(moveDate(sessionDate, delta));
+    setSession(null);
+    setChecked(new Set());
     setError("");
-
-    const { error: paymentError } = await supabase.rpc("register_payment", {
-      p_person_id: person.id,
-      p_amount_ore: 37500,
-      p_clips: 10,
-      p_note:
-        person.type === "gæst"
-          ? "10 klip efter gratis prøvetime"
-          : "Nyt klippekort med 10 klip",
-    });
-
-    if (paymentError) {
-      setSavingId(null);
-      return friendlyError(paymentError.message);
-    }
-
-    setSavingId(null);
-    await loadAttendancePage();
-    setRecentlyPaidId(person.id);
-    setNotice(`${person.name} har nu 10 klip.`);
-    return null;
-  }
-
-  async function removeGuest(person: Person) {
-    setSavingId(person.id);
-    setError("");
-
-    const { data, error: removeError } = await supabase.rpc(
-      "remove_unpaid_guest",
-      { p_person_id: person.id },
-    );
-
-    setSavingId(null);
-
-    if (removeError) return friendlyError(removeError.message);
-    if (!data) return "Personen kunne ikke fjernes.";
-
-    await loadAttendancePage();
-    return null;
   }
 
   async function addGuest(name: string) {
-    setError("");
+    const clean = name.trim();
+    if (!clean) return "Navn mangler";
 
-    if (people.some((person) => normalizedName(person.name) === normalizedName(name))) {
-      return `${name} står allerede på deltagerlisten.`;
-    }
+    const exists = people.some((person) => person.name.localeCompare(clean, "da", { sensitivity: "base" }) === 0);
+    if (exists) return "Personen står allerede på listen";
 
-    const activeSession = await ensureTrainingSession();
-    if (!activeSession) return "Træningsgangen kunne ikke oprettes.";
+    const result = await supabase.from("people").insert({
+      name: clean,
+      type: "gæst",
+      balance: null,
+      payment_status: "skal_betale",
+      privacy_notice_given_at: new Date().toISOString(),
+    });
 
-    const { error: createError } = await supabase.rpc(
-      "create_guest_for_session",
-      {
-        p_name: name,
-        p_session_id: activeSession.id,
-      },
-    );
-
-    if (createError && !isMissingCreateGuestFunction(createError.message)) {
-      return friendlyError(createError.message);
-    }
-
-    if (createError) {
-      const { data: newGuest, error: insertError } = await supabase
-        .from("people")
-        .insert({
-          name,
-          type: "gæst",
-          balance: null,
-          payment_status: "skal_betale",
-          privacy_notice_given_at: new Date().toISOString(),
-        })
-        .select("id,name,type,balance,payment_status,created_at")
-        .single();
-
-      if (insertError) return friendlyError(insertError.message);
-
-      const guest = newGuest as Person;
-      const { error: attendanceError } = await supabase.rpc(
-        "register_attendance_for_session",
-        {
-          p_person_id: guest.id,
-          p_session_id: activeSession.id,
-          p_type: "prøvetime",
-        },
-      );
-
-      if (attendanceError) {
-        await supabase.rpc("remove_unpaid_guest", {
-          p_person_id: guest.id,
-        });
-        return friendlyError(attendanceError.message);
-      }
-    }
-
-    await loadAttendancePage();
+    if (result.error) return result.error.message;
+    await loadPage();
     return null;
   }
 
-  if (loading) return <LoadingScreen />;
-
-  if (!selectedClass) {
-    return (
-      <main className="min-h-screen bg-[#f4f5f1] px-4 py-10 text-[#18322b]">
-        <div className="mx-auto max-w-xl">
-          <ErrorBox message={error || "Ingen træningshold fundet."} />
-        </div>
-      </main>
-    );
-  }
+  if (loading) return <main className="flex min-h-screen items-center justify-center bg-[#f4f5f1]">Indlæser…</main>;
+  if (!selectedClass) return <main className="min-h-screen bg-[#f4f5f1] p-6">Ingen træningshold fundet.</main>;
 
   return (
     <main className="min-h-screen bg-[#f4f5f1] px-3 py-5 text-[#18322b] sm:px-5 sm:py-8">
       <div className="mx-auto max-w-xl">
         <nav className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-          <button
-            type="button"
-            onClick={() => changeTraining(-1)}
-            className="min-h-12 justify-self-start rounded-xl px-1 text-left text-sm font-bold text-[#28755d] active:bg-[#e4ebe6] sm:px-2"
-          >
-            ← Forrige hold
-          </button>
-
-          <h1 className="whitespace-nowrap text-center text-base font-black sm:text-xl">
-            {classTitle(selectedClass, sessionDate)}
+          <button onClick={() => changeClass(-1)} className="min-h-12 justify-self-start text-sm font-bold text-[#28755d]">← Forrige hold</button>
+          <h1 className="whitespace-nowrap text-center text-xl font-black">
+            {weekday(sessionDate)} {time(selectedClass.start_time)}–{time(selectedClass.end_time)}
           </h1>
-
-          <button
-            type="button"
-            onClick={() => changeTraining(1)}
-            className="min-h-12 justify-self-end rounded-xl px-1 text-right text-sm font-bold text-[#28755d] active:bg-[#e4ebe6] sm:px-2"
-          >
-            Næste hold →
-          </button>
+          <button onClick={() => changeClass(1)} className="min-h-12 justify-self-end text-sm font-bold text-[#28755d]">Næste hold →</button>
         </nav>
 
-        <p className="mt-3 text-sm font-semibold text-[#60756d]">
-          Dato: <span className="text-[#18322b]">{displayDate(sessionDate)}</span>
-        </p>
+        <p className="mt-3 text-sm font-semibold text-[#60756d]">Dato: <span className="text-[#18322b]">{displayDate(sessionDate)}</span></p>
 
-        {/* RETTET: tydelig visuel markering af, at man kigger på historik og ikke kan redigere */}
-        {isReadOnlyView && (
-          <div className="mt-3 rounded-xl bg-[#eef1ee] p-3 text-sm font-bold text-[#526960]">
-            Historisk visning · kan ikke ændres
-          </div>
-        )}
+        {error && <div className="mt-4 rounded-xl bg-[#fee9e5] p-4 text-sm font-semibold text-[#8d342d]">{error}</div>}
 
-        {error && <ErrorBox message={error} />}
-        {notice && (
-          <div className="mt-4 rounded-xl bg-[#e6f4ec] p-4 text-sm font-bold text-[#176247]">
-            {notice}
-          </div>
-        )}
+        <button onClick={() => setAddingGuest(true)} className="mt-5 min-h-12 px-2 text-base font-black text-[#28755d]">+ Gæst</button>
 
-        {/* RETTET: "+ Gæst" skal ikke kunne bruges på en historisk dag */}
-        {!isReadOnlyView && (
-          <button
-            type="button"
-            onClick={() => setAddingGuest(true)}
-            className="mt-5 min-h-12 rounded-xl px-2 text-base font-black text-[#28755d] active:bg-[#e4ebe6]"
-          >
-            + Gæst
-          </button>
-        )}
-
-        <section
-          aria-busy={pageLoading}
-          className={`mt-2 overflow-hidden rounded-2xl border border-[#d9e0da] bg-white shadow-sm transition ${
-            pageLoading ? "opacity-55" : ""
-          }`}
-        >
-          {sortedPeople.length === 0 ? (
-            <p className="px-4 py-10 text-center text-sm text-[#60756d]">Ingen deltagere.</p>
-          ) : (
-            <div className="divide-y divide-[#e8ece8]">
-              {sortedPeople.map((person) => {
-                const checked = checkedIds.has(person.id);
-                const saving = savingId === person.id;
-                const needsPayment = personNeedsPayment(
-                  person,
-                  guestTrialDates[person.id],
-                  sessionDate,
-                );
-                const hasLowBalance =
-                  person.type === "medlem" && clipBalance(person) <= 1;
-                const recentlyPaid = recentlyPaidId === person.id;
-
-                return (
-                  <button
-                    key={person.id}
-                    id={`person-${person.id}`}
-                    type="button"
-                    onClick={() =>
-                      toggleAttendance(currentPeopleById.get(person.id) ?? person)
-                    }
-                    disabled={Boolean(savingId) || pageLoading || isReadOnlyView}
-                    aria-pressed={checked}
-                    className={`grid min-h-16 w-full grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 text-left transition ${
-                      recentlyPaid
-                        ? "bg-[#e6f4ec] ring-2 ring-inset ring-[#2f8a69]"
-                        : checked
-                          ? "bg-[#eef1ee] opacity-45"
-                          : "bg-white active:bg-[#f1f5f2]"
-                    } ${isReadOnlyView ? "cursor-default" : ""}`}
-                  >
-                    <span
-                      aria-hidden="true"
-                      className={`flex h-7 w-7 items-center justify-center rounded-md border-2 text-base font-black ${
-                        checked
-                          ? "border-[#28755d] bg-[#28755d] text-white"
-                          : needsPayment
-                            ? "border-[#d0a155] bg-[#fff4df] text-[#8b5605]"
-                          : "border-[#aebdb5] bg-white text-transparent"
-                      }`}
-                    >
-                      {needsPayment ? "!" : "✓"}
-                    </span>
-
-                    <span className="min-w-0 truncate text-base font-bold sm:text-lg">
-                      {person.name}
-                    </span>
-
-                    <span
-                      className={`whitespace-nowrap text-sm font-bold sm:text-base ${
-                        needsPayment || hasLowBalance
-                          ? "text-[#b42318]"
-                          : "text-[#526960]"
-                      }`}
-                    >
-                      {saving
-                        ? "…"
-                        : statusText(
-                            person,
-                            guestTrialDates[person.id],
-                            sessionDate,
-                          )}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
+        <section className="mt-2 overflow-hidden rounded-2xl border border-[#d9e0da] bg-white shadow-sm">
+          {sortedPeople.map((person) => {
+            const isChecked = checked.has(person.id);
+            const blocked = person.type === "medlem" && (person.balance ?? 0) <= 0;
+            return (
+              <button
+                key={person.id}
+                onClick={() => void toggle(person)}
+                disabled={Boolean(busyId)}
+                className={`grid min-h-16 w-full grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-3 border-b border-[#e8ece8] px-4 py-3 text-left ${isChecked ? "bg-[#eef1ee] opacity-45" : "bg-white"}`}
+              >
+                <span className={`flex h-7 w-7 items-center justify-center rounded-md border-2 text-base font-black ${isChecked ? "border-[#28755d] bg-[#28755d] text-white" : blocked ? "border-[#d0a155] bg-[#fff4df] text-[#8b5605]" : "border-[#aebdb5] text-transparent"}`}>{blocked ? "!" : "✓"}</span>
+                <span className="truncate text-lg font-bold">{person.name}</span>
+                <span className={`whitespace-nowrap text-base font-bold ${blocked || person.balance === 1 ? "text-[#b42318]" : "text-[#526960]"}`}>{busyId === person.id ? "…" : status(person)}</span>
+              </button>
+            );
+          })}
         </section>
       </div>
 
-      {addingGuest && (
-        <AddGuest
-          onClose={() => setAddingGuest(false)}
-          onSave={addGuest}
-        />
-      )}
-
-      {paymentPerson && (
-        <PaymentDialog
-          person={paymentPerson}
-          onClose={() => setPaymentPerson(null)}
-          onConfirm={registerPayment}
-          onRemove={removeGuest}
-        />
-      )}
+      {addingGuest && <GuestDialog onClose={() => setAddingGuest(false)} onSave={addGuest} />}
     </main>
   );
 }
 
-function AddGuest({
-  onClose,
-  onSave,
-}: {
-  onClose: () => void;
-  onSave: (name: string) => Promise<string | null>;
-}) {
+function GuestDialog({ onClose, onSave }: { onClose: () => void; onSave: (name: string) => Promise<string | null> }) {
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    const cleanName = name.trim();
-    if (!cleanName) return;
-
     setBusy(true);
-    setError("");
-    const saveError = await onSave(cleanName);
+    const result = await onSave(name);
     setBusy(false);
-
-    if (saveError) {
-      setError(saveError);
-      return;
-    }
-
+    if (result) return setError(result);
     onClose();
   }
 
   return (
     <div className="fixed inset-0 z-20 flex items-end bg-black/35 p-3 sm:items-center sm:justify-center">
-      <form
-        onSubmit={submit}
-        className="w-full rounded-2xl bg-white p-5 text-[#18322b] shadow-xl sm:max-w-sm"
-      >
-        <div className="flex items-center justify-between gap-4">
-          <h2 className="text-xl font-black">Tilføj gæst</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Luk"
-            className="h-11 w-11 rounded-xl text-3xl text-[#60756d]"
-          >
-            ×
-          </button>
-        </div>
-
-        <input
-          autoFocus
-          required
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          placeholder="Navn"
-          className="mt-4 min-h-14 w-full rounded-xl border border-[#bcc9c2] px-4 text-lg outline-none focus:border-[#28755d]"
-        />
-
+      <form onSubmit={submit} className="w-full rounded-2xl bg-white p-5 text-[#18322b] shadow-xl sm:max-w-sm">
+        <h2 className="text-xl font-black">Tilføj gæst</h2>
+        <input autoFocus required value={name} onChange={(event) => setName(event.target.value)} placeholder="Navn" className="mt-4 min-h-14 w-full rounded-xl border border-[#bcc9c2] px-4 text-lg" />
         {error && <p className="mt-3 text-sm font-semibold text-[#8d342d]">{error}</p>}
-
-        <button
-          disabled={busy || !name.trim()}
-          className="mt-4 min-h-14 w-full rounded-xl bg-[#28755d] px-4 font-black text-white disabled:opacity-40"
-        >
-          {busy ? "Gemmer…" : "Tilføj"}
-        </button>
+        <button disabled={busy} className="mt-4 min-h-14 w-full rounded-xl bg-[#28755d] font-black text-white">{busy ? "Gemmer…" : "Tilføj"}</button>
+        <button type="button" onClick={onClose} className="mt-2 min-h-12 w-full font-bold text-[#60756d]">Annuller</button>
       </form>
     </div>
-  );
-}
-
-function PaymentDialog({
-  person,
-  onClose,
-  onConfirm,
-  onRemove,
-}: {
-  person: Person;
-  onClose: () => void;
-  onConfirm: (person: Person) => Promise<string | null>;
-  onRemove: (person: Person) => Promise<string | null>;
-}) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-
-  async function confirmPayment() {
-    setBusy(true);
-    setError("");
-    const paymentError = await onConfirm(person);
-    setBusy(false);
-
-    if (paymentError) {
-      setError(paymentError);
-      return;
-    }
-
-    onClose();
-  }
-
-  async function confirmRemoval() {
-    if (!window.confirm(`Fjern ${person.name} fra listen?`)) return;
-
-    setBusy(true);
-    setError("");
-    const removeError = await onRemove(person);
-    setBusy(false);
-
-    if (removeError) {
-      setError(removeError);
-      return;
-    }
-
-    onClose();
-  }
-
-  return (
-    <div className="fixed inset-0 z-20 flex items-end bg-black/35 p-3 sm:items-center sm:justify-center">
-      <div className="w-full rounded-2xl bg-white p-5 text-[#18322b] shadow-xl sm:max-w-sm">
-        <div className="flex items-center justify-between gap-4">
-          <h2 className="text-xl font-black">Skal betale 375 kr.</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={busy}
-            aria-label="Luk"
-            className="h-11 w-11 rounded-xl text-3xl text-[#60756d]"
-          >
-            ×
-          </button>
-        </div>
-
-        <p className="mt-3 text-base font-bold">{person.name}</p>
-        <p className="mt-1 text-sm text-[#60756d]">
-          Tryk først, når MobilePay er modtaget. Personen får 10 klip. Luk
-          derefter boksen, og klik personen af på deltagerlisten.
-        </p>
-
-        {error && <p className="mt-3 text-sm font-semibold text-[#8d342d]">{error}</p>}
-
-        <button
-          type="button"
-          onClick={confirmPayment}
-          disabled={busy}
-          className="mt-4 min-h-14 w-full rounded-xl bg-[#28755d] px-4 font-black text-white disabled:opacity-40"
-        >
-          {busy ? "Gemmer…" : "MobilePay modtaget"}
-        </button>
-
-        {person.type === "gæst" && (
-          <button
-            type="button"
-            onClick={confirmRemoval}
-            disabled={busy}
-            className="mt-3 min-h-12 w-full rounded-xl px-4 font-bold text-[#8d342d] disabled:opacity-40"
-          >
-            Fjern fra listen
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function ErrorBox({ message }: { message: string }) {
-  return (
-    <div className="mt-4 rounded-xl bg-[#fee9e5] p-4 text-sm font-semibold text-[#8d342d]">
-      {message}
-    </div>
-  );
-}
-
-function LoadingScreen() {
-  return (
-    <main className="flex min-h-screen items-center justify-center bg-[#f4f5f1] font-bold text-[#60756d]">
-      Indlæser…
-    </main>
   );
 }
