@@ -251,6 +251,8 @@ export default function Home() {
   const [addingGuest, setAddingGuest] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [paymentPerson, setPaymentPerson] = useState<Person | null>(null);
+  const [recentlyPaidId, setRecentlyPaidId] = useState<string | null>(null);
+  const [notice, setNotice] = useState("");
 
   const loadClasses = useCallback(async () => {
     const { data, error: classError } = await supabase
@@ -485,6 +487,31 @@ export default function Home() {
     });
   }, [people, selectedClass]);
 
+  useEffect(() => {
+    if (!recentlyPaidId) return;
+
+    const scrollTimeout = window.setTimeout(() => {
+      document
+        .getElementById(`person-${recentlyPaidId}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 50);
+    const clearTimeout = window.setTimeout(() => {
+      setRecentlyPaidId(null);
+    }, 2500);
+
+    return () => {
+      window.clearTimeout(scrollTimeout);
+      window.clearTimeout(clearTimeout);
+    };
+  }, [recentlyPaidId]);
+
+  useEffect(() => {
+    if (!notice) return;
+
+    const timeoutId = window.setTimeout(() => setNotice(""), 3500);
+    return () => window.clearTimeout(timeoutId);
+  }, [notice]);
+
   async function toggleAttendance(person: Person) {
     if (savingId || trainingSession?.status === "aflyst") return;
 
@@ -576,6 +603,8 @@ export default function Home() {
 
     setSavingId(null);
     await loadAttendancePage();
+    setRecentlyPaidId(person.id);
+    setNotice(`${person.name} har nu 10 klip.`);
     return null;
   }
 
@@ -678,6 +707,11 @@ export default function Home() {
         </p>
 
         {error && <ErrorBox message={error} />}
+        {notice && (
+          <div className="mt-4 rounded-xl bg-[#e6f4ec] p-4 text-sm font-bold text-[#176247]">
+            {notice}
+          </div>
+        )}
 
         <button
           type="button"
@@ -707,16 +741,22 @@ export default function Home() {
                 );
                 const hasLowBalance =
                   person.type === "medlem" && clipBalance(person) <= 1;
+                const recentlyPaid = recentlyPaidId === person.id;
 
                 return (
                   <button
                     key={person.id}
+                    id={`person-${person.id}`}
                     type="button"
                     onClick={() => toggleAttendance(person)}
                     disabled={Boolean(savingId) || pageLoading}
                     aria-pressed={checked}
                     className={`grid min-h-16 w-full grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 text-left transition ${
-                      checked ? "bg-[#eef1ee] opacity-45" : "bg-white active:bg-[#f1f5f2]"
+                      recentlyPaid
+                        ? "bg-[#e6f4ec] ring-2 ring-inset ring-[#2f8a69]"
+                        : checked
+                          ? "bg-[#eef1ee] opacity-45"
+                          : "bg-white active:bg-[#f1f5f2]"
                     }`}
                   >
                     <span
