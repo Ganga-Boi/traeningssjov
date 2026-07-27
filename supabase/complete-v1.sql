@@ -1,1 +1,370 @@
-LS0gVHLDpm5pbmdzc2pvdjogc2FtbGV0IHJlcGFyYXRpb24gb2cgZsOmcmRpZ2fDuHJlbHNlIGFmIHYxLgotLSBLYW4ga8O4cmVzIGZsZXJlIGdhbmdlIGkgU3VwYWJhc2UgU1FMIEVkaXRvci4KLS0gRm9ydWRzw6Z0dGVyLCBhdCBzY2hlbWEuc3FsIG9nIGNsYXNzZXMtc2Vzc2lvbnMtbWlncmF0aW9uLnNxbCBlciBrw7hydC4KCmJlZ2luOwoKLS0gw4ZsZHJlIGRhdGFiYXNlciBtYW5nbGVyIGRlbm5lIGtvbG9ubmUsIHNlbHYgb20gZGVuIGZpbmRlcyBpIGRlbiBueWVzdGUgc2NoZW1hLnNxbC4KYWx0ZXIgdGFibGUgcHVibGljLnBlb3BsZQogIGFkZCBjb2x1bW4gaWYgbm90IGV4aXN0cyBwcml2YWN5X25vdGljZV9naXZlbl9hdCB0aW1lc3RhbXB0ejsKCi0tIEV0IGtsaXBwZWtvcnQga2FuIGFsZHJpZyBoYXZlIG1pbmRyZSBlbmQgMCBlbGxlciBtZXJlIGVuZCAxMCBrbGlwLgp1cGRhdGUgcHVibGljLnBlb3BsZQpzZXQgYmFsYW5jZSA9IGdyZWF0ZXN0KDAsIGxlYXN0KGJhbGFuY2UsIDEwKSksCiAgICBwYXltZW50X3N0YXR1cyA9IGNhc2UKICAgICAgd2hlbiBncmVhdGVzdCgwLCBsZWFzdChiYWxhbmNlLCAxMCkpID0gMAogICAgICAgIHRoZW4gJ3NrYWxfYmV0YWxlJzo6cHVibGljLnBheW1lbnRfc3RhdHVzCiAgICAgIGVsc2UgJ29rJzo6cHVibGljLnBheW1lbnRfc3RhdHVzCiAgICBlbmQsCiAgICB1cGRhdGVkX2F0ID0gbm93KCkKd2hlcmUgdHlwZSA9ICdtZWRsZW0nOjpwdWJsaWMucGVyc29uX3R5cGUKICBhbmQgKGJhbGFuY2UgPCAwIG9yIGJhbGFuY2UgPiAxMCk7CgphbHRlciB0YWJsZSBwdWJsaWMucGVvcGxlCiAgZHJvcCBjb25zdHJhaW50IGlmIGV4aXN0cyBtZW1iZXJfYmFsYW5jZV9iZXR3ZWVuX3plcm9fYW5kX3RlbjsKCmFsdGVyIHRhYmxlIHB1YmxpYy5wZW9wbGUKICBhZGQgY29uc3RyYWludCBtZW1iZXJfYmFsYW5jZV9iZXR3ZWVuX3plcm9fYW5kX3RlbiBjaGVjayAoCiAgICB0eXBlID0gJ2fDpnN0Jzo6cHVibGljLnBlcnNvbl90eXBlIG9yIGJhbGFuY2UgYmV0d2VlbiAwIGFuZCAxMAogICk7CgpjcmVhdGUgdW5pcXVlIGluZGV4IGlmIG5vdCBleGlzdHMgcGF5bWVudHNfb25lX3JldmVyc2FsX3Blcl9wYXltZW50CiAgb24gcHVibGljLnBheW1lbnRzKHJldmVyc2VkX3BheW1lbnRfaWQpCiAgd2hlcmUgcmV2ZXJzZWRfcGF5bWVudF9pZCBpcyBub3QgbnVsbDsKCmNyZWF0ZSBvciByZXBsYWNlIGZ1bmN0aW9uIHB1YmxpYy5yZWdpc3Rlcl9wYXltZW50KAogIHBfcGVyc29uX2lkIHV1aWQsCiAgcF9hbW91bnRfb3JlIGludGVnZXIgZGVmYXVsdCAzNzUwMCwKICBwX2NsaXBzIGludGVnZXIgZGVmYXVsdCAxMCwKICBwX25vdGUgdGV4dCBkZWZhdWx0IG51bGwKKSByZXR1cm5zIHB1YmxpYy5wYXltZW50cwpsYW5ndWFnZSBwbHBnc3FsCnNlY3VyaXR5IGRlZmluZXIKc2V0IHNlYXJjaF9wYXRoID0gcHVibGljCmFzICQkCmRlY2xhcmUKICB2X3BlcnNvbiBwdWJsaWMucGVvcGxlOwogIHZfcGF5bWVudCBwdWJsaWMucGF5bWVudHM7CiAgdl9uZXdfYmFsYW5jZSBpbnRlZ2VyOwpiZWdpbgogIGlmIHBfYW1vdW50X29yZSA8PSAwIG9yIHBfY2xpcHMgPD0gMCBvciBwX2NsaXBzID4gMTAgdGhlbgogICAgcmFpc2UgZXhjZXB0aW9uICdBbW91bnQgbXVzdCBiZSBwb3NpdGl2ZSBhbmQgY2xpcHMgbXVzdCBiZSBiZXR3ZWVuIDEgYW5kIDEwJzsKICBlbmQgaWY7CgogIHNlbGVjdCAqIGludG8gdl9wZXJzb24KICBmcm9tIHB1YmxpYy5wZW9wbGUKICB3aGVyZSBpZCA9IHBfcGVyc29uX2lkCiAgZm9yIHVwZGF0ZTsKCiAgaWYgbm90IGZvdW5kIHRoZW4KICAgIHJhaXNlIGV4Y2VwdGlvbiAnUGVyc29uIG5vdCBmb3VuZCc7CiAgZW5kIGlmOwoKICBpbnNlcnQgaW50byBwdWJsaWMucGF5bWVudHMocGVyc29uX2lkLCBhbW91bnRfb3JlLCBjbGlwcywgbm90ZSkKICB2YWx1ZXMgKHBfcGVyc29uX2lkLCBwX2Ftb3VudF9vcmUsIHBfY2xpcHMsIHBfbm90ZSkKICByZXR1cm5pbmcgKiBpbnRvIHZfcGF5bWVudDsKCiAgdl9uZXdfYmFsYW5jZSA6PSBwX2NsaXBzOwoKICB1cGRhdGUgcHVibGljLnBlb3BsZQogIHNldCB0eXBlID0gJ21lZGxlbScsCiAgICAgIGJhbGFuY2UgPSB2X25ld19iYWxhbmNlLAogICAgICBwYXltZW50X3N0YXR1cyA9IGNhc2UKICAgICAgICB3aGVuIHZfbmV3X2JhbGFuY2UgPCAwIHRoZW4gJ2Jsb2tlcmV0Jzo6cHVibGljLnBheW1lbnRfc3RhdHVzCiAgICAgICAgd2hlbiB2X25ld19iYWxhbmNlID0gMCB0aGVuICdza2FsX2JldGFsZSc6OnB1YmxpYy5wYXltZW50X3N0YXR1cwogICAgICAgIGVsc2UgJ29rJzo6cHVibGljLnBheW1lbnRfc3RhdHVzCiAgICAgIGVuZCwKICAgICAgdXBkYXRlZF9hdCA9IG5vdygpCiAgd2hlcmUgaWQgPSBwX3BlcnNvbl9pZDsKCiAgcmV0dXJuIHZfcGF5bWVudDsKZW5kOwokJDsKCmNyZWF0ZSBvciByZXBsYWNlIGZ1bmN0aW9uIHB1YmxpYy51bmRvX2F0dGVuZGFuY2VfZm9yX3Nlc3Npb24oCiAgcF9wZXJzb25faWQgdXVpZCwKICBwX3Nlc3Npb25faWQgdXVpZAopIHJldHVybnMgYm9vbGVhbgpsYW5ndWFnZSBwbHBnc3FsCnNlY3VyaXR5IGRlZmluZXIKc2V0IHNlYXJjaF9wYXRoID0gcHVibGljCmFzICQkCmRlY2xhcmUKICB2X2F0dGVuZGFuY2UgcHVibGljLmF0dGVuZGFuY2U7CiAgdl9wZXJzb24gcHVibGljLnBlb3BsZTsKICB2X25ld19iYWxhbmNlIGludGVnZXI7CmJlZ2luCiAgc2VsZWN0ICogaW50byB2X2F0dGVuZGFuY2UKICBmcm9tIHB1YmxpYy5hdHRlbmRhbmNlCiAgd2hlcmUgcGVyc29uX2lkID0gcF9wZXJzb25faWQKICAgIGFuZCBzZXNzaW9uX2lkID0gcF9zZXNzaW9uX2lkCiAgZm9yIHVwZGF0ZTsKCiAgaWYgbm90IGZvdW5kIHRoZW4KICAgIHJldHVybiBmYWxzZTsKICBlbmQgaWY7CgogIHNlbGVjdCAqIGludG8gdl9wZXJzb24KICBmcm9tIHB1YmxpYy5wZW9wbGUKICB3aGVyZSBpZCA9IHBfcGVyc29uX2lkCiAgZm9yIHVwZGF0ZTsKCiAgaWYgbm90IGZvdW5kIHRoZW4KICAgIHJhaXNlIGV4Y2VwdGlvbiAnUGVyc29uIG5vdCBmb3VuZCc7CiAgZW5kIGlmOwoKICBkZWxldGUgZnJvbSBwdWJsaWMuYXR0ZW5kYW5jZQogIHdoZXJlIGlkID0gdl9hdHRlbmRhbmNlLmlkOwoKICBpZiB2X3BlcnNvbi50eXBlID0gJ21lZGxlbScgYW5kIHZfYXR0ZW5kYW5jZS50eXBlIGluICgnbm9ybWFsJywgJ2tyZWRpdCcpIHRoZW4KICAgIHZfbmV3X2JhbGFuY2UgOj0gbGVhc3QoY29hbGVzY2Uodl9wZXJzb24uYmFsYW5jZSwgMCkgKyAxLCAxMCk7CgogICAgdXBkYXRlIHB1YmxpYy5wZW9wbGUKICAgIHNldCBiYWxhbmNlID0gdl9uZXdfYmFsYW5jZSwKICAgICAgICBwYXltZW50X3N0YXR1cyA9IGNhc2UKICAgICAgICAgIHdoZW4gdl9uZXdfYmFsYW5jZSA8IDAgdGhlbiAnYmxva2VyZXQnOjpwdWJsaWMucGF5bWVudF9zdGF0dXMKICAgICAgICAgIHdoZW4gdl9uZXdfYmFsYW5jZSA9IDAgdGhlbiAnc2thbF9iZXRhbGUnOjpwdWJsaWMucGF5bWVudF9zdGF0dXMKICAgICAgICAgIGVsc2UgJ29rJzo6cHVibGljLnBheW1lbnRfc3RhdHVzCiAgICAgICAgZW5kLAogICAgICAgIHVwZGF0ZWRfYXQgPSBub3coKQogICAgd2hlcmUgaWQgPSBwX3BlcnNvbl9pZDsKICBlbmQgaWY7CgogIGlmIG5vdCBleGlzdHMgKAogICAgc2VsZWN0IDEgZnJvbSBwdWJsaWMuYXR0ZW5kYW5jZSB3aGVyZSBzZXNzaW9uX2lkID0gcF9zZXNzaW9uX2lkCiAgKSB0aGVuCiAgICB1cGRhdGUgcHVibGljLnNlc3Npb25zCiAgICBzZXQgc3RhdHVzID0gJ3BsYW5sYWd0JwogICAgd2hlcmUgaWQgPSBwX3Nlc3Npb25faWQKICAgICAgYW5kIHN0YXR1cyA9ICdhZmhvbGR0JzsKICBlbmQgaWY7CgogIHJldHVybiB0cnVlOwplbmQ7CiQkOwoKY3JlYXRlIG9yIHJlcGxhY2UgZnVuY3Rpb24gcHVibGljLnJlbW92ZV91bnBhaWRfZ3Vlc3QoCiAgcF9wZXJzb25faWQgdXVpZAopIHJldHVybnMgYm9vbGVhbgpsYW5ndWFnZSBwbHBnc3FsCnNlY3VyaXR5IGRlZmluZXIKc2V0IHNlYXJjaF9wYXRoID0gcHVibGljCmFzICQkCmRlY2xhcmUKICB2X2RlbGV0ZWRfaWQgdXVpZDsKYmVnaW4KICBkZWxldGUgZnJvbSBwdWJsaWMucGVvcGxlCiAgd2hlcmUgaWQgPSBwX3BlcnNvbl9pZAogICAgYW5kIHR5cGUgPSAnZ8Omc3QnOjpwdWJsaWMucGVyc29uX3R5cGUKICByZXR1cm5pbmcgaWQgaW50byB2X2RlbGV0ZWRfaWQ7CgogIHJldHVybiB2X2RlbGV0ZWRfaWQgaXMgbm90IG51bGw7CmVuZDsKJCQ7CgpjcmVhdGUgb3IgcmVwbGFjZSBmdW5jdGlvbiBwdWJsaWMucmV2ZXJzZV9wYXltZW50KAogIHBfcGF5bWVudF9pZCB1dWlkLAogIHBfbm90ZSB0ZXh0IGRlZmF1bHQgJ0JldGFsaW5nIGZvcnRydWR0JwopIHJldHVybnMgcHVibGljLnBheW1lbnRzCmxhbmd1YWdlIHBscGdzcWwKc2VjdXJpdHkgZGVmaW5lcgpzZXQgc2VhcmNoX3BhdGggPSBwdWJsaWMKYXMgJCQKZGVjbGFyZQogIHZfb3JpZ2luYWwgcHVibGljLnBheW1lbnRzOwogIHZfcmV2ZXJzYWwgcHVibGljLnBheW1lbnRzOwogIHZfcGVyc29uIHB1YmxpYy5wZW9wbGU7CiAgdl9uZXdfYmFsYW5jZSBpbnRlZ2VyOwpiZWdpbgogIHNlbGVjdCAqIGludG8gdl9vcmlnaW5hbAogIGZyb20gcHVibGljLnBheW1lbnRzCiAgd2hlcmUgaWQgPSBwX3BheW1lbnRfaWQKICAgIGFuZCByZXZlcnNlZF9wYXltZW50X2lkIGlzIG51bGwKICAgIGFuZCBhbW91bnRfb3JlID4gMAogICAgYW5kIGNsaXBzID4gMAogIGZvciB1cGRhdGU7CgogIGlmIG5vdCBmb3VuZCB0aGVuCiAgICByYWlzZSBleGNlcHRpb24gJ09yaWdpbmFsIHBheW1lbnQgbm90IGZvdW5kJzsKICBlbmQgaWY7CgogIGlmIGV4aXN0cyAoCiAgICBzZWxlY3QgMQogICAgZnJvbSBwdWJsaWMucGF5bWVudHMKICAgIHdoZXJlIHJldmVyc2VkX3BheW1lbnRfaWQgPSBwX3BheW1lbnRfaWQKICApIHRoZW4KICAgIHJhaXNlIGV4Y2VwdGlvbiAnUGF5bWVudCBpcyBhbHJlYWR5IHJldmVyc2VkJzsKICBlbmQgaWY7CgogIHNlbGVjdCAqIGludG8gdl9wZXJzb24KICBmcm9tIHB1YmxpYy5wZW9wbGUKICB3aGVyZSBpZCA9IHZfb3JpZ2luYWwucGVyc29uX2lkCiAgZm9yIHVwZGF0ZTsKCiAgaWYgbm90IGZvdW5kIHRoZW4KICAgIHJhaXNlIGV4Y2VwdGlvbiAnUGVyc29uIG5vdCBmb3VuZCc7CiAgZW5kIGlmOwoKICBpbnNlcnQgaW50byBwdWJsaWMucGF5bWVudHMoCiAgICBwZXJzb25faWQsCiAgICBhbW91bnRfb3JlLAogICAgY2xpcHMsCiAgICByZXZlcnNlZF9wYXltZW50X2lkLAogICAgbm90ZQogICkKICB2YWx1ZXMgKAogICAgdl9vcmlnaW5hbC5wZXJzb25faWQsCiAgICAtdl9vcmlnaW5hbC5hbW91bnRfb3JlLAogICAgLXZfb3JpZ2luYWwuY2xpcHMsCiAgICB2X29yaWdpbmFsLmlkLAogICAgcF9ub3RlCiAgKQogIHJldHVybmluZyAqIGludG8gdl9yZXZlcnNhbDsKCiAgdl9uZXdfYmFsYW5jZSA6PSBncmVhdGVzdChjb2FsZXNjZSh2X3BlcnNvbi5iYWxhbmNlLCAwKSAtIHZfb3JpZ2luYWwuY2xpcHMsIDApOwoKICB1cGRhdGUgcHVibGljLnBlb3BsZQogIHNldCBiYWxhbmNlID0gdl9uZXdfYmFsYW5jZSwKICAgICAgcGF5bWVudF9zdGF0dXMgPSBjYXNlCiAgICAgICAgd2hlbiB2X25ld19iYWxhbmNlIDwgMCB0aGVuICdibG9rZXJldCc6OnB1YmxpYy5wYXltZW50X3N0YXR1cwogICAgICAgIHdoZW4gdl9uZXdfYmFsYW5jZSA9IDAgdGhlbiAnc2thbF9iZXRhbGUnOjpwdWJsaWMucGF5bWVudF9zdGF0dXMKICAgICAgICBlbHNlICdvayc6OnB1YmxpYy5wYXltZW50X3N0YXR1cwogICAgICBlbmQsCiAgICAgIHVwZGF0ZWRfYXQgPSBub3coKQogIHdoZXJlIGlkID0gdl9vcmlnaW5hbC5wZXJzb25faWQ7CgogIHJldHVybiB2X3JldmVyc2FsOwplbmQ7CiQkOwoKYWx0ZXIgdGFibGUgcHVibGljLnBlb3BsZSBlbmFibGUgcm93IGxldmVsIHNlY3VyaXR5OwphbHRlciB0YWJsZSBwdWJsaWMuY2xhc3NlcyBlbmFibGUgcm93IGxldmVsIHNlY3VyaXR5OwphbHRlciB0YWJsZSBwdWJsaWMuc2Vzc2lvbnMgZW5hYmxlIHJvdyBsZXZlbCBzZWN1cml0eTsKYWx0ZXIgdGFibGUgcHVibGljLmF0dGVuZGFuY2UgZW5hYmxlIHJvdyBsZXZlbCBzZWN1cml0eTsKYWx0ZXIgdGFibGUgcHVibGljLnBheW1lbnRzIGVuYWJsZSByb3cgbGV2ZWwgc2VjdXJpdHk7Cgpkcm9wIHBvbGljeSBpZiBleGlzdHMgImFub24gY2FuIHJlYWQgcGVvcGxlIiBvbiBwdWJsaWMucGVvcGxlOwpkcm9wIHBvbGljeSBpZiBleGlzdHMgImFub24gY2FuIGNyZWF0ZSBwZW9wbGUiIG9uIHB1YmxpYy5wZW9wbGU7CmRyb3AgcG9saWN5IGlmIGV4aXN0cyAiYW5vbiBjYW4gdXBkYXRlIHBlb3BsZSIgb24gcHVibGljLnBlb3BsZTsKZHJvcCBwb2xpY3kgaWYgZXhpc3RzICJhbm9uIGNhbiByZWFkIGNsYXNzZXMiIG9uIHB1YmxpYy5jbGFzc2VzOwpkcm9wIHBvbGljeSBpZiBleGlzdHMgImFub24gY2FuIHJlYWQgc2Vzc2lvbnMiIG9uIHB1YmxpYy5zZXNzaW9uczsKZHJvcCBwb2xpY3kgaWYgZXhpc3RzICJhbm9uIGNhbiBjcmVhdGUgc2Vzc2lvbnMiIG9uIHB1YmxpYy5zZXNzaW9uczsKZHJvcCBwb2xpY3kgaWYgZXhpc3RzICJhbm9uIGNhbiByZWFkIGF0dGVuZGFuY2UiIG9uIHB1YmxpYy5hdHRlbmRhbmNlOwpkcm9wIHBvbGljeSBpZiBleGlzdHMgImFub24gY2FuIGNyZWF0ZSBhdHRlbmRhbmNlIiBvbiBwdWJsaWMuYXR0ZW5kYW5jZTsKZHJvcCBwb2xpY3kgaWYgZXhpc3RzICJhbm9uIGNhbiByZWFkIHBheW1lbnRzIiBvbiBwdWJsaWMucGF5bWVudHM7CmRyb3AgcG9saWN5IGlmIGV4aXN0cyAiYW5vbiBjYW4gY3JlYXRlIHBheW1lbnRzIiBvbiBwdWJsaWMucGF5bWVudHM7CgpjcmVhdGUgcG9saWN5ICJhbm9uIGNhbiByZWFkIHBlb3BsZSIKb24gcHVibGljLnBlb3BsZSBmb3Igc2VsZWN0CnRvIGFub24KdXNpbmcgKHRydWUpOwoKY3JlYXRlIHBvbGljeSAiYW5vbiBjYW4gY3JlYXRlIHBlb3BsZSIKb24gcHVibGljLnBlb3BsZSBmb3IgaW5zZXJ0CnRvIGFub24Kd2l0aCBjaGVjayAodHJ1ZSk7CgpjcmVhdGUgcG9saWN5ICJhbm9uIGNhbiByZWFkIGNsYXNzZXMiCm9uIHB1YmxpYy5jbGFzc2VzIGZvciBzZWxlY3QKdG8gYW5vbgp1c2luZyAodHJ1ZSk7CgpjcmVhdGUgcG9saWN5ICJhbm9uIGNhbiByZWFkIHNlc3Npb25zIgpvbiBwdWJsaWMuc2Vzc2lvbnMgZm9yIHNlbGVjdAp0byBhbm9uCnVzaW5nICh0cnVlKTsKCmNyZWF0ZSBwb2xpY3kgImFub24gY2FuIHJlYWQgYXR0ZW5kYW5jZSIKb24gcHVibGljLmF0dGVuZGFuY2UgZm9yIHNlbGVjdAp0byBhbm9uCnVzaW5nICh0cnVlKTsKCmNyZWF0ZSBwb2xpY3kgImFub24gY2FuIHJlYWQgcGF5bWVudHMiCm9uIHB1YmxpYy5wYXltZW50cyBmb3Igc2VsZWN0CnRvIGFub24KdXNpbmcgKHRydWUpOwoKZ3JhbnQgdXNhZ2Ugb24gc2NoZW1hIHB1YmxpYyB0byBhbm9uOwoKcmV2b2tlIGFsbCBwcml2aWxlZ2VzIG9uIHRhYmxlCiAgcHVibGljLnBlb3BsZSwKICBwdWJsaWMuY2xhc3NlcywKICBwdWJsaWMuc2Vzc2lvbnMsCiAgcHVibGljLmF0dGVuZGFuY2UsCiAgcHVibGljLnBheW1lbnRzCmZyb20gYW5vbjsKCmdyYW50IHNlbGVjdCBvbiB0YWJsZQogIHB1YmxpYy5wZW9wbGUsCiAgcHVibGljLmNsYXNzZXMsCiAgcHVibGljLnNlc3Npb25zLAogIHB1YmxpYy5hdHRlbmRhbmNlLAogIHB1YmxpYy5wYXltZW50cwp0byBhbm9uOwoKZ3JhbnQgaW5zZXJ0IG9uIHRhYmxlIHB1YmxpYy5wZW9wbGUgdG8gYW5vbjsKCnJldm9rZSBhbGwgb24gZnVuY3Rpb24gcHVibGljLmdldF9vcl9jcmVhdGVfc2Vzc2lvbih1dWlkLCBkYXRlKSBmcm9tIHB1YmxpYywgYW5vbjsKcmV2b2tlIGFsbCBvbiBmdW5jdGlvbiBwdWJsaWMucmVnaXN0ZXJfYXR0ZW5kYW5jZV9mb3Jfc2Vzc2lvbih1dWlkLCB1dWlkLCBwdWJsaWMuYXR0ZW5kYW5jZV90eXBlKSBmcm9tIHB1YmxpYywgYW5vbjsKcmV2b2tlIGFsbCBvbiBmdW5jdGlvbiBwdWJsaWMucmVnaXN0ZXJfcGF5bWVudCh1dWlkLCBpbnRlZ2VyLCBpbnRlZ2VyLCB0ZXh0KSBmcm9tIHB1YmxpYywgYW5vbjsKcmV2b2tlIGFsbCBvbiBmdW5jdGlvbiBwdWJsaWMudW5kb19hdHRlbmRhbmNlX2Zvcl9zZXNzaW9uKHV1aWQsIHV1aWQpIGZyb20gcHVibGljLCBhbm9uOwpyZXZva2UgYWxsIG9uIGZ1bmN0aW9uIHB1YmxpYy5yZW1vdmVfdW5wYWlkX2d1ZXN0KHV1aWQpIGZyb20gcHVibGljLCBhbm9uOwpyZXZva2UgYWxsIG9uIGZ1bmN0aW9uIHB1YmxpYy5yZXZlcnNlX3BheW1lbnQodXVpZCwgdGV4dCkgZnJvbSBwdWJsaWMsIGFub247CgpncmFudCBleGVjdXRlIG9uIGZ1bmN0aW9uIHB1YmxpYy5nZXRfb3JfY3JlYXRlX3Nlc3Npb24odXVpZCwgZGF0ZSkgdG8gYW5vbjsKZ3JhbnQgZXhlY3V0ZSBvbiBmdW5jdGlvbiBwdWJsaWMucmVnaXN0ZXJfYXR0ZW5kYW5jZV9mb3Jfc2Vzc2lvbih1dWlkLCB1dWlkLCBwdWJsaWMuYXR0ZW5kYW5jZV90eXBlKSB0byBhbm9uOwpncmFudCBleGVjdXRlIG9uIGZ1bmN0aW9uIHB1YmxpYy5yZWdpc3Rlcl9wYXltZW50KHV1aWQsIGludGVnZXIsIGludGVnZXIsIHRleHQpIHRvIGFub247CmdyYW50IGV4ZWN1dGUgb24gZnVuY3Rpb24gcHVibGljLnVuZG9fYXR0ZW5kYW5jZV9mb3Jfc2Vzc2lvbih1dWlkLCB1dWlkKSB0byBhbm9uOwpncmFudCBleGVjdXRlIG9uIGZ1bmN0aW9uIHB1YmxpYy5yZW1vdmVfdW5wYWlkX2d1ZXN0KHV1aWQpIHRvIGFub247CmdyYW50IGV4ZWN1dGUgb24gZnVuY3Rpb24gcHVibGljLnJldmVyc2VfcGF5bWVudCh1dWlkLCB0ZXh0KSB0byBhbm9uOwoKLS0gRmplcm4gZ8Omc3RlciwgZGVyIHRpZGxpZ2VyZSBibGV2IG9wcmV0dGV0IGF1dG9tYXRpc2sgc29tIHRlc3RkYXRhLgotLSBSaWd0aWdlIGfDpnN0ZXIgc2thbCBrdW4ga29tbWUgZnJhICIrIEfDpnN0IiBpIGFwcGVuLgpkZWxldGUgZnJvbSBwdWJsaWMucGVvcGxlCndoZXJlIHR5cGUgPSAnZ8Omc3QnOjpwdWJsaWMucGVyc29uX3R5cGUKICBhbmQgbG93ZXIobmFtZSkgaW4gKAogICAgbG93ZXIoJ0Jlbm55IEhhbnNlbicpLAogICAgbG93ZXIoJ1BldGVyIEhhbnNlbicpLAogICAgbG93ZXIoJ1NvZmllIChnw6ZzdCknKQogICk7CgotLSBGaWt0aXZlIG1lZGxlbW1lciB0aWwgdjEtdGVzdC4gRWtzaXN0ZXJlbmRlIG5hdm5lIG9wcmV0dGVzIGlra2UgaWdlbi4KaW5zZXJ0IGludG8gcHVibGljLnBlb3BsZSgKICBuYW1lLAogIHR5cGUsCiAgYmFsYW5jZSwKICBwYXltZW50X3N0YXR1cywKICBwcml2YWN5X25vdGljZV9naXZlbl9hdAopCnNlbGVjdAogIGRlbW8ubmFtZSwKICAnbWVkbGVtJzo6cHVibGljLnBlcnNvbl90eXBlLAogIGRlbW8uYmFsYW5jZSwKICBjYXNlCiAgICB3aGVuIGRlbW8uYmFsYW5jZSA9IDAgdGhlbiAnc2thbF9iZXRhbGUnOjpwdWJsaWMucGF5bWVudF9zdGF0dXMKICAgIGVsc2UgJ29rJzo6cHVibGljLnBheW1lbnRfc3RhdHVzCiAgZW5kLAogIG5vdygpCmZyb20gKAogIHZhbHVlcwogICAgKCdBbm5hIE1hZHNlbicsIDgpLAogICAgKCdCaXJnaXQgSG9sbScsIDUpLAogICAgKCdDYW1pbGxhIEZyaWlzJywgMiksCiAgICAoJ0RvcnRlIExhcnNlbicsIDEwKSwKICAgICgnRXZhIE5pZWxzZW4nLCAwKSwKICAgICgnRnJlamEgQmFjaCcsIDcpLAogICAgKCdIZWxsZSBNw7hsbGVyJywgNCksCiAgICAoJ0lkYSBUaG9tc2VuJywgOSksCiAgICAoJ0thcmVuIFPDuHJlbnNlbicsIDYpLAogICAgKCdMZW5lIEFuZGVyc2VuJywgMykKKSBhcyBkZW1vKG5hbWUsIGJhbGFuY2UpCndoZXJlIG5vdCBleGlzdHMgKAogIHNlbGVjdCAxCiAgZnJvbSBwdWJsaWMucGVvcGxlIGV4aXN0aW5nCiAgd2hlcmUgbG93ZXIoZXhpc3RpbmcubmFtZSkgPSBsb3dlcihkZW1vLm5hbWUpCik7Cgpjb21taXQ7CgotLSBTw7hyZyBmb3IsIGF0IG55ZSBSUEMtZnVua3Rpb25lciBzdHJha3MgYmxpdmVyIHN5bmxpZ2UgZm9yIGFwcGVuLgpub3RpZnkgcGdyc3QsICdyZWxvYWQgc2NoZW1hJzsK
+-- Træningssjov: samlet reparation og færdiggørelse af v1.
+-- Kan køres flere gange i Supabase SQL Editor.
+-- Forudsætter, at schema.sql og classes-sessions-migration.sql er kørt.
+
+begin;
+
+-- Ældre databaser mangler denne kolonne, selv om den findes i den nyeste schema.sql.
+alter table public.people
+  add column if not exists privacy_notice_given_at timestamptz;
+
+-- Et klippekort kan aldrig have mindre end 0 eller mere end 10 klip.
+update public.people
+set balance = greatest(0, least(balance, 10)),
+    payment_status = case
+      when greatest(0, least(balance, 10)) = 0
+        then 'skal_betale'::public.payment_status
+      else 'ok'::public.payment_status
+    end,
+    updated_at = now()
+where type = 'medlem'::public.person_type
+  and (balance < 0 or balance > 10);
+
+alter table public.people
+  drop constraint if exists member_balance_between_zero_and_ten;
+
+alter table public.people
+  add constraint member_balance_between_zero_and_ten check (
+    type = 'gæst'::public.person_type or balance between 0 and 10
+  );
+
+create unique index if not exists payments_one_reversal_per_payment
+  on public.payments(reversed_payment_id)
+  where reversed_payment_id is not null;
+
+create or replace function public.register_payment(
+  p_person_id uuid,
+  p_amount_ore integer default 37500,
+  p_clips integer default 10,
+  p_note text default null
+) returns public.payments
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_person public.people;
+  v_payment public.payments;
+  v_new_balance integer;
+begin
+  if p_amount_ore <= 0 or p_clips <= 0 or p_clips > 10 then
+    raise exception 'Amount must be positive and clips must be between 1 and 10';
+  end if;
+
+  select * into v_person
+  from public.people
+  where id = p_person_id
+  for update;
+
+  if not found then
+    raise exception 'Person not found';
+  end if;
+
+  insert into public.payments(person_id, amount_ore, clips, note)
+  values (p_person_id, p_amount_ore, p_clips, p_note)
+  returning * into v_payment;
+
+  v_new_balance := p_clips;
+
+  update public.people
+  set type = 'medlem',
+      balance = v_new_balance,
+      payment_status = case
+        when v_new_balance < 0 then 'blokeret'::public.payment_status
+        when v_new_balance = 0 then 'skal_betale'::public.payment_status
+        else 'ok'::public.payment_status
+      end,
+      updated_at = now()
+  where id = p_person_id;
+
+  return v_payment;
+end;
+$$;
+
+create or replace function public.undo_attendance_for_session(
+  p_person_id uuid,
+  p_session_id uuid
+) returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_attendance public.attendance;
+  v_person public.people;
+  v_new_balance integer;
+begin
+  select * into v_attendance
+  from public.attendance
+  where person_id = p_person_id
+    and session_id = p_session_id
+  for update;
+
+  if not found then
+    return false;
+  end if;
+
+  select * into v_person
+  from public.people
+  where id = p_person_id
+  for update;
+
+  if not found then
+    raise exception 'Person not found';
+  end if;
+
+  delete from public.attendance
+  where id = v_attendance.id;
+
+  if v_person.type = 'medlem' and v_attendance.type in ('normal', 'kredit') then
+    v_new_balance := least(coalesce(v_person.balance, 0) + 1, 10);
+
+    update public.people
+    set balance = v_new_balance,
+        payment_status = case
+          when v_new_balance < 0 then 'blokeret'::public.payment_status
+          when v_new_balance = 0 then 'skal_betale'::public.payment_status
+          else 'ok'::public.payment_status
+        end,
+        updated_at = now()
+    where id = p_person_id;
+  end if;
+
+  if not exists (
+    select 1 from public.attendance where session_id = p_session_id
+  ) then
+    update public.sessions
+    set status = 'planlagt'
+    where id = p_session_id
+      and status = 'afholdt';
+  end if;
+
+  return true;
+end;
+$$;
+
+create or replace function public.remove_unpaid_guest(
+  p_person_id uuid
+) returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_deleted_id uuid;
+begin
+  delete from public.people
+  where id = p_person_id
+    and type = 'gæst'::public.person_type
+  returning id into v_deleted_id;
+
+  return v_deleted_id is not null;
+end;
+$$;
+
+create or replace function public.reverse_payment(
+  p_payment_id uuid,
+  p_note text default 'Betaling fortrudt'
+) returns public.payments
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_original public.payments;
+  v_reversal public.payments;
+  v_person public.people;
+  v_new_balance integer;
+begin
+  select * into v_original
+  from public.payments
+  where id = p_payment_id
+    and reversed_payment_id is null
+    and amount_ore > 0
+    and clips > 0
+  for update;
+
+  if not found then
+    raise exception 'Original payment not found';
+  end if;
+
+  if exists (
+    select 1
+    from public.payments
+    where reversed_payment_id = p_payment_id
+  ) then
+    raise exception 'Payment is already reversed';
+  end if;
+
+  select * into v_person
+  from public.people
+  where id = v_original.person_id
+  for update;
+
+  if not found then
+    raise exception 'Person not found';
+  end if;
+
+  insert into public.payments(
+    person_id,
+    amount_ore,
+    clips,
+    reversed_payment_id,
+    note
+  )
+  values (
+    v_original.person_id,
+    -v_original.amount_ore,
+    -v_original.clips,
+    v_original.id,
+    p_note
+  )
+  returning * into v_reversal;
+
+  v_new_balance := greatest(coalesce(v_person.balance, 0) - v_original.clips, 0);
+
+  update public.people
+  set balance = v_new_balance,
+      payment_status = case
+        when v_new_balance < 0 then 'blokeret'::public.payment_status
+        when v_new_balance = 0 then 'skal_betale'::public.payment_status
+        else 'ok'::public.payment_status
+      end,
+      updated_at = now()
+  where id = v_original.person_id;
+
+  return v_reversal;
+end;
+$$;
+
+alter table public.people enable row level security;
+alter table public.classes enable row level security;
+alter table public.sessions enable row level security;
+alter table public.attendance enable row level security;
+alter table public.payments enable row level security;
+
+drop policy if exists "anon can read people" on public.people;
+drop policy if exists "anon can create people" on public.people;
+drop policy if exists "anon can update people" on public.people;
+drop policy if exists "anon can read classes" on public.classes;
+drop policy if exists "anon can read sessions" on public.sessions;
+drop policy if exists "anon can create sessions" on public.sessions;
+drop policy if exists "anon can read attendance" on public.attendance;
+drop policy if exists "anon can create attendance" on public.attendance;
+drop policy if exists "anon can read payments" on public.payments;
+drop policy if exists "anon can create payments" on public.payments;
+
+create policy "anon can read people"
+on public.people for select
+to anon
+using (true);
+
+create policy "anon can create people"
+on public.people for insert
+to anon
+with check (true);
+
+create policy "anon can read classes"
+on public.classes for select
+to anon
+using (true);
+
+create policy "anon can read sessions"
+on public.sessions for select
+to anon
+using (true);
+
+create policy "anon can read attendance"
+on public.attendance for select
+to anon
+using (true);
+
+create policy "anon can read payments"
+on public.payments for select
+to anon
+using (true);
+
+grant usage on schema public to anon;
+
+revoke all privileges on table
+  public.people,
+  public.classes,
+  public.sessions,
+  public.attendance,
+  public.payments
+from anon;
+
+grant select on table
+  public.people,
+  public.classes,
+  public.sessions,
+  public.attendance,
+  public.payments
+to anon;
+
+grant insert on table public.people to anon;
+
+revoke all on function public.get_or_create_session(uuid, date) from public, anon;
+revoke all on function public.register_attendance_for_session(uuid, uuid, public.attendance_type) from public, anon;
+revoke all on function public.register_payment(uuid, integer, integer, text) from public, anon;
+revoke all on function public.undo_attendance_for_session(uuid, uuid) from public, anon;
+revoke all on function public.remove_unpaid_guest(uuid) from public, anon;
+revoke all on function public.reverse_payment(uuid, text) from public, anon;
+
+grant execute on function public.get_or_create_session(uuid, date) to anon;
+grant execute on function public.register_attendance_for_session(uuid, uuid, public.attendance_type) to anon;
+grant execute on function public.register_payment(uuid, integer, integer, text) to anon;
+grant execute on function public.undo_attendance_for_session(uuid, uuid) to anon;
+grant execute on function public.remove_unpaid_guest(uuid) to anon;
+grant execute on function public.reverse_payment(uuid, text) to anon;
+
+-- Fjern gæster, der tidligere blev oprettet automatisk som testdata.
+-- Rigtige gæster skal kun komme fra "+ Gæst" i appen.
+delete from public.people
+where type = 'gæst'::public.person_type
+  and lower(name) in (
+    lower('Benny Hansen'),
+    lower('Peter Hansen'),
+    lower('Sofie (gæst)')
+  );
+
+-- Fiktive medlemmer til v1-test. Eksisterende navne oprettes ikke igen.
+insert into public.people(
+  name,
+  type,
+  balance,
+  payment_status,
+  privacy_notice_given_at
+)
+select
+  demo.name,
+  'medlem'::public.person_type,
+  demo.balance,
+  case
+    when demo.balance = 0 then 'skal_betale'::public.payment_status
+    else 'ok'::public.payment_status
+  end,
+  now()
+from (
+  values
+    ('Anna Madsen', 8),
+    ('Birgit Holm', 5),
+    ('Camilla Friis', 2),
+    ('Dorte Larsen', 10),
+    ('Eva Nielsen', 0),
+    ('Freja Bach', 7),
+    ('Helle Møller', 4),
+    ('Ida Thomsen', 9),
+    ('Karen Sørensen', 6),
+    ('Lene Andersen', 3)
+) as demo(name, balance)
+where not exists (
+  select 1
+  from public.people existing
+  where lower(existing.name) = lower(demo.name)
+);
+
+commit;
+
+-- Sørg for, at nye RPC-funktioner straks bliver synlige for appen.
+notify pgrst, 'reload schema';
