@@ -1,1 +1,172 @@
-LS0gRU5HQU5HU05VTFNUSUxMSU5HIEFGIFRSw4ZOSU5HU1NKT1YgVjEuCi0tIEvDuHIgaGVsZSBmaWxlbiDDqW4gZ2FuZyBpIFN1cGFiYXNlIFNRTCBFZGl0b3IgZsO4ciBkZW4gZsO4cnN0ZSByaWd0aWdlIHRlc3QuCi0tIEZpbGVuIHNsZXR0ZXIgYWxsZSBudXbDpnJlbmRlIHBlcnNvbmVyLCBnw6ZzdGVyLCBmcmVtbcO4ZGVyIG9nIHRlc3RiZXRhbGluZ2VyLgoKYmVnaW47CgphbHRlciB0YWJsZSBwdWJsaWMucGVvcGxlCiAgYWRkIGNvbHVtbiBpZiBub3QgZXhpc3RzIHByaXZhY3lfbm90aWNlX2dpdmVuX2F0IHRpbWVzdGFtcHR6OwoKLS0gw4ZsZHJlIFRyw6ZuaW5nc3Nqb3YtZGF0YWJhc2VyIGJydWd0ZSBhbW91bnQgKGtyb25lcikgb2cgY2xpcF9jb3VudC4KLS0gTWlncsOpciBkZW0gdGlsIGRldCBudXbDpnJlbmRlIHNrZW1hIHVkZW4gYXQgc2xldHRlIGJldGFsaW5nc2hpc3RvcmlrLgpkbyAkbWlncmF0aW9uJApiZWdpbgogIGlmIGV4aXN0cyAoCiAgICBzZWxlY3QgMQogICAgZnJvbSBpbmZvcm1hdGlvbl9zY2hlbWEuY29sdW1ucwogICAgd2hlcmUgdGFibGVfc2NoZW1hID0gJ3B1YmxpYycKICAgICAgYW5kIHRhYmxlX25hbWUgPSAncGF5bWVudHMnCiAgICAgIGFuZCBjb2x1bW5fbmFtZSA9ICdhbW91bnQnCiAgKSBhbmQgbm90IGV4aXN0cyAoCiAgICBzZWxlY3QgMQogICAgZnJvbSBpbmZvcm1hdGlvbl9zY2hlbWEuY29sdW1ucwogICAgd2hlcmUgdGFibGVfc2NoZW1hID0gJ3B1YmxpYycKICAgICAgYW5kIHRhYmxlX25hbWUgPSAncGF5bWVudHMnCiAgICAgIGFuZCBjb2x1bW5fbmFtZSA9ICdhbW91bnRfb3JlJwogICkgdGhlbgogICAgYWx0ZXIgdGFibGUgcHVibGljLnBheW1lbnRzIHJlbmFtZSBjb2x1bW4gYW1vdW50IHRvIGFtb3VudF9vcmU7CiAgZW5kIGlmOwoKICBpZiBleGlzdHMgKAogICAgc2VsZWN0IDEKICAgIGZyb20gaW5mb3JtYXRpb25fc2NoZW1hLmNvbHVtbnMKICAgIHdoZXJlIHRhYmxlX3NjaGVtYSA9ICdwdWJsaWMnCiAgICAgIGFuZCB0YWJsZV9uYW1lID0gJ3BheW1lbnRzJwogICAgICBhbmQgY29sdW1uX25hbWUgPSAnYW1vdW50X29yZScKICAgICAgYW5kIGRhdGFfdHlwZSA9ICdudW1lcmljJwogICkgdGhlbgogICAgYWx0ZXIgdGFibGUgcHVibGljLnBheW1lbnRzCiAgICAgIGFsdGVyIGNvbHVtbiBhbW91bnRfb3JlIHR5cGUgaW50ZWdlcgogICAgICB1c2luZyByb3VuZChhbW91bnRfb3JlICogMTAwKTo6aW50ZWdlcjsKICBlbmQgaWY7CgogIGlmIGV4aXN0cyAoCiAgICBzZWxlY3QgMQogICAgZnJvbSBpbmZvcm1hdGlvbl9zY2hlbWEuY29sdW1ucwogICAgd2hlcmUgdGFibGVfc2NoZW1hID0gJ3B1YmxpYycKICAgICAgYW5kIHRhYmxlX25hbWUgPSAncGF5bWVudHMnCiAgICAgIGFuZCBjb2x1bW5fbmFtZSA9ICdjbGlwX2NvdW50JwogICkgYW5kIG5vdCBleGlzdHMgKAogICAgc2VsZWN0IDEKICAgIGZyb20gaW5mb3JtYXRpb25fc2NoZW1hLmNvbHVtbnMKICAgIHdoZXJlIHRhYmxlX3NjaGVtYSA9ICdwdWJsaWMnCiAgICAgIGFuZCB0YWJsZV9uYW1lID0gJ3BheW1lbnRzJwogICAgICBhbmQgY29sdW1uX25hbWUgPSAnY2xpcHMnCiAgKSB0aGVuCiAgICBhbHRlciB0YWJsZSBwdWJsaWMucGF5bWVudHMgcmVuYW1lIGNvbHVtbiBjbGlwX2NvdW50IHRvIGNsaXBzOwogIGVuZCBpZjsKZW5kOwokbWlncmF0aW9uJDsKCmNyZWF0ZSBvciByZXBsYWNlIGZ1bmN0aW9uIHB1YmxpYy5yZWdpc3Rlcl9wYXltZW50KAogIHBfcGVyc29uX2lkIHV1aWQsCiAgcF9hbW91bnRfb3JlIGludGVnZXIgZGVmYXVsdCAzNzUwMCwKICBwX2NsaXBzIGludGVnZXIgZGVmYXVsdCAxMCwKICBwX25vdGUgdGV4dCBkZWZhdWx0IG51bGwKKSByZXR1cm5zIHB1YmxpYy5wYXltZW50cwpsYW5ndWFnZSBwbHBnc3FsCnNlY3VyaXR5IGRlZmluZXIKc2V0IHNlYXJjaF9wYXRoID0gcHVibGljCmFzICQkCmRlY2xhcmUKICB2X3BlcnNvbiBwdWJsaWMucGVvcGxlOwogIHZfcGF5bWVudCBwdWJsaWMucGF5bWVudHM7CiAgdl9uZXdfYmFsYW5jZSBpbnRlZ2VyOwpiZWdpbgogIGlmIHBfYW1vdW50X29yZSA8PSAwIG9yIHBfY2xpcHMgPD0gMCBvciBwX2NsaXBzID4gMTAgdGhlbgogICAgcmFpc2UgZXhjZXB0aW9uICdBbW91bnQgbXVzdCBiZSBwb3NpdGl2ZSBhbmQgY2xpcHMgbXVzdCBiZSBiZXR3ZWVuIDEgYW5kIDEwJzsKICBlbmQgaWY7CgogIHNlbGVjdCAqIGludG8gdl9wZXJzb24KICBmcm9tIHB1YmxpYy5wZW9wbGUKICB3aGVyZSBpZCA9IHBfcGVyc29uX2lkCiAgZm9yIHVwZGF0ZTsKCiAgaWYgbm90IGZvdW5kIHRoZW4KICAgIHJhaXNlIGV4Y2VwdGlvbiAnUGVyc29uIG5vdCBmb3VuZCc7CiAgZW5kIGlmOwoKICBpbnNlcnQgaW50byBwdWJsaWMucGF5bWVudHMocGVyc29uX2lkLCBhbW91bnRfb3JlLCBjbGlwcywgbm90ZSkKICB2YWx1ZXMgKHBfcGVyc29uX2lkLCBwX2Ftb3VudF9vcmUsIHBfY2xpcHMsIHBfbm90ZSkKICByZXR1cm5pbmcgKiBpbnRvIHZfcGF5bWVudDsKCiAgdl9uZXdfYmFsYW5jZSA6PSBwX2NsaXBzOwoKICB1cGRhdGUgcHVibGljLnBlb3BsZQogIHNldCB0eXBlID0gJ21lZGxlbScsCiAgICAgIGJhbGFuY2UgPSB2X25ld19iYWxhbmNlLAogICAgICBwYXltZW50X3N0YXR1cyA9ICdvayc6OnB1YmxpYy5wYXltZW50X3N0YXR1cywKICAgICAgdXBkYXRlZF9hdCA9IG5vdygpCiAgd2hlcmUgaWQgPSBwX3BlcnNvbl9pZDsKCiAgcmV0dXJuIHZfcGF5bWVudDsKZW5kOwokJDsKCmNyZWF0ZSBvciByZXBsYWNlIGZ1bmN0aW9uIHB1YmxpYy5yZW1vdmVfdW5wYWlkX2d1ZXN0KAogIHBfcGVyc29uX2lkIHV1aWQKKSByZXR1cm5zIGJvb2xlYW4KbGFuZ3VhZ2UgcGxwZ3NxbApzZWN1cml0eSBkZWZpbmVyCnNldCBzZWFyY2hfcGF0aCA9IHB1YmxpYwphcyAkJApkZWNsYXJlCiAgdl9kZWxldGVkX2lkIHV1aWQ7CmJlZ2luCiAgZGVsZXRlIGZyb20gcHVibGljLnBlb3BsZQogIHdoZXJlIGlkID0gcF9wZXJzb25faWQKICAgIGFuZCB0eXBlID0gJ2fDpnN0Jzo6cHVibGljLnBlcnNvbl90eXBlCiAgcmV0dXJuaW5nIGlkIGludG8gdl9kZWxldGVkX2lkOwoKICByZXR1cm4gdl9kZWxldGVkX2lkIGlzIG5vdCBudWxsOwplbmQ7CiQkOwoKcmV2b2tlIGFsbCBvbiBmdW5jdGlvbiBwdWJsaWMucmVnaXN0ZXJfcGF5bWVudCh1dWlkLCBpbnRlZ2VyLCBpbnRlZ2VyLCB0ZXh0KQpmcm9tIHB1YmxpYywgYW5vbjsKcmV2b2tlIGFsbCBvbiBmdW5jdGlvbiBwdWJsaWMucmVtb3ZlX3VucGFpZF9ndWVzdCh1dWlkKQpmcm9tIHB1YmxpYywgYW5vbjsKCmdyYW50IGV4ZWN1dGUgb24gZnVuY3Rpb24gcHVibGljLnJlZ2lzdGVyX3BheW1lbnQodXVpZCwgaW50ZWdlciwgaW50ZWdlciwgdGV4dCkKdG8gYW5vbjsKZ3JhbnQgZXhlY3V0ZSBvbiBmdW5jdGlvbiBwdWJsaWMucmVtb3ZlX3VucGFpZF9ndWVzdCh1dWlkKQp0byBhbm9uOwoKZGVsZXRlIGZyb20gcHVibGljLmF0dGVuZGFuY2U7CmRlbGV0ZSBmcm9tIHB1YmxpYy5zZXNzaW9uczsKZGVsZXRlIGZyb20gcHVibGljLnBheW1lbnRzOwpkZWxldGUgZnJvbSBwdWJsaWMucGVvcGxlOwoKaW5zZXJ0IGludG8gcHVibGljLnBlb3BsZSgKICBuYW1lLAogIHR5cGUsCiAgYmFsYW5jZSwKICBwYXltZW50X3N0YXR1cywKICBwcml2YWN5X25vdGljZV9naXZlbl9hdAopCnNlbGVjdAogIGRlbW8ubmFtZSwKICAnbWVkbGVtJzo6cHVibGljLnBlcnNvbl90eXBlLAogIGRlbW8uYmFsYW5jZSwKICBjYXNlCiAgICB3aGVuIGRlbW8uYmFsYW5jZSA9IDAgdGhlbiAnc2thbF9iZXRhbGUnOjpwdWJsaWMucGF5bWVudF9zdGF0dXMKICAgIGVsc2UgJ29rJzo6cHVibGljLnBheW1lbnRfc3RhdHVzCiAgZW5kLAogIG5vdygpCmZyb20gKAogIHZhbHVlcwogICAgKCdBbm5hIE1hZHNlbicsIDgpLAogICAgKCdCaXJnaXQgSG9sbScsIDUpLAogICAgKCdDYW1pbGxhIEZyaWlzJywgMiksCiAgICAoJ0RvcnRlIExhcnNlbicsIDEwKSwKICAgICgnRXZhIE5pZWxzZW4nLCAwKSwKICAgICgnRnJlamEgQmFjaCcsIDcpLAogICAgKCdIZWxsZSBNw7hsbGVyJywgNCksCiAgICAoJ0lkYSBUaG9tc2VuJywgOSksCiAgICAoJ0thcmVuIFPDuHJlbnNlbicsIDYpLAogICAgKCdMZW5lIEFuZGVyc2VuJywgMykKKSBhcyBkZW1vKG5hbWUsIGJhbGFuY2UpOwoKY29tbWl0OwoKbm90aWZ5IHBncnN0LCAncmVsb2FkIHNjaGVtYSc7Cg==
+-- ENGANGSNULSTILLING AF TRÆNINGSSJOV V1.
+-- Kør hele filen én gang i Supabase SQL Editor før den første rigtige test.
+-- Filen sletter alle nuværende personer, gæster, fremmøder og testbetalinger.
+
+begin;
+
+alter table public.people
+  add column if not exists privacy_notice_given_at timestamptz;
+
+-- Ældre Træningssjov-databaser brugte amount (kroner) og clip_count.
+-- Migrér dem til det nuværende skema uden at slette betalingshistorik.
+do $migration$
+begin
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'payments'
+      and column_name = 'amount'
+  ) and not exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'payments'
+      and column_name = 'amount_ore'
+  ) then
+    alter table public.payments rename column amount to amount_ore;
+  end if;
+
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'payments'
+      and column_name = 'amount_ore'
+      and data_type = 'numeric'
+  ) then
+    alter table public.payments
+      alter column amount_ore type integer
+      using round(amount_ore * 100)::integer;
+  end if;
+
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'payments'
+      and column_name = 'clip_count'
+  ) and not exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'payments'
+      and column_name = 'clips'
+  ) then
+    alter table public.payments rename column clip_count to clips;
+  end if;
+end;
+$migration$;
+
+create or replace function public.register_payment(
+  p_person_id uuid,
+  p_amount_ore integer default 37500,
+  p_clips integer default 10,
+  p_note text default null
+) returns public.payments
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_person public.people;
+  v_payment public.payments;
+  v_new_balance integer;
+begin
+  if p_amount_ore <= 0 or p_clips <= 0 or p_clips > 10 then
+    raise exception 'Amount must be positive and clips must be between 1 and 10';
+  end if;
+
+  select * into v_person
+  from public.people
+  where id = p_person_id
+  for update;
+
+  if not found then
+    raise exception 'Person not found';
+  end if;
+
+  insert into public.payments(person_id, amount_ore, clips, note)
+  values (p_person_id, p_amount_ore, p_clips, p_note)
+  returning * into v_payment;
+
+  v_new_balance := p_clips;
+
+  update public.people
+  set type = 'medlem',
+      balance = v_new_balance,
+      payment_status = 'ok'::public.payment_status,
+      updated_at = now()
+  where id = p_person_id;
+
+  return v_payment;
+end;
+$$;
+
+create or replace function public.remove_unpaid_guest(
+  p_person_id uuid
+) returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_deleted_id uuid;
+begin
+  delete from public.people
+  where id = p_person_id
+    and type = 'gæst'::public.person_type
+  returning id into v_deleted_id;
+
+  return v_deleted_id is not null;
+end;
+$$;
+
+revoke all on function public.register_payment(uuid, integer, integer, text)
+from public, anon;
+revoke all on function public.remove_unpaid_guest(uuid)
+from public, anon;
+
+grant execute on function public.register_payment(uuid, integer, integer, text)
+to anon;
+grant execute on function public.remove_unpaid_guest(uuid)
+to anon;
+
+delete from public.attendance;
+delete from public.sessions;
+delete from public.payments;
+delete from public.people;
+
+insert into public.people(
+  name,
+  type,
+  balance,
+  payment_status,
+  privacy_notice_given_at
+)
+select
+  demo.name,
+  'medlem'::public.person_type,
+  demo.balance,
+  case
+    when demo.balance = 0 then 'skal_betale'::public.payment_status
+    else 'ok'::public.payment_status
+  end,
+  now()
+from (
+  values
+    ('Anna Madsen', 8),
+    ('Birgit Holm', 5),
+    ('Camilla Friis', 2),
+    ('Dorte Larsen', 10),
+    ('Eva Nielsen', 0),
+    ('Freja Bach', 7),
+    ('Helle Møller', 4),
+    ('Ida Thomsen', 9),
+    ('Karen Sørensen', 6),
+    ('Lene Andersen', 3)
+) as demo(name, balance);
+
+commit;
+
+notify pgrst, 'reload schema';
