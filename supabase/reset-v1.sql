@@ -9,7 +9,7 @@ alter table public.people
 
 -- Ældre Træningssjov-databaser brugte amount (kroner) og clip_count.
 -- Migrér dem til det nuværende skema uden at slette betalingshistorik.
-do $
+do $migration$
 begin
   if exists (
     select 1
@@ -56,7 +56,7 @@ begin
     alter table public.payments rename column clip_count to clips;
   end if;
 end;
-$;
+$migration$;
 
 create or replace function public.register_payment(
   p_person_id uuid,
