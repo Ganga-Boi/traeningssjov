@@ -460,8 +460,15 @@ export default function Home() {
         const joinedThisClass =
           trialClassIds[person.id]?.includes(selectedClass.id) &&
           Boolean(trialDate && sessionDate >= trialDate);
+        const carriedForwardFromEarlierTrial = Boolean(
+          trialDate && sessionDate > trialDate,
+        );
 
-        return isFixedMember || joinedThisClass;
+        return (
+          isFixedMember ||
+          joinedThisClass ||
+          carriedForwardFromEarlierTrial
+        );
       },
     );
 
@@ -883,8 +890,8 @@ function GuestPayment({
 
         <p className="mt-3 text-base font-bold">{person.name}</p>
         <p className="mt-1 text-sm text-[#60756d]">
-          Tryk først, når MobilePay er modtaget. Personen får 10 klip og
-          registreres bagefter som fremmødt på deltagerlisten.
+          Tryk først, når MobilePay er modtaget. Personen får 10 klip. Luk
+          derefter boksen, og klik personen af på deltagerlisten.
         </p>
 
         {error && <p className="mt-3 text-sm font-semibold text-[#8d342d]">{error}</p>}
