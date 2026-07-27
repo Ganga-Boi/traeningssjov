@@ -698,3 +698,231 @@ export default function Home() {
                     className={`grid min-h-16 w-full grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 text-left transition ${
                       checked ? "bg-[#eef1ee] opacity-45" : "bg-white active:bg-[#f1f5f2]"
                     }`}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={`flex h-7 w-7 items-center justify-center rounded-md border-2 text-base font-black ${
+                        checked
+                          ? "border-[#28755d] bg-[#28755d] text-white"
+                          : needsPayment
+                            ? "border-[#d0a155] bg-[#fff4df] text-[#8b5605]"
+                          : "border-[#aebdb5] bg-white text-transparent"
+                      }`}
+                    >
+                      {needsPayment ? "!" : "✓"}
+                    </span>
+
+                    <span className="min-w-0 truncate text-base font-bold sm:text-lg">
+                      {person.name}
+                    </span>
+
+                    <span className="whitespace-nowrap text-sm font-bold text-[#526960] sm:text-base">
+                      {saving
+                        ? "…"
+                        : statusText(
+                            person,
+                            guestTrialDates[person.id],
+                            sessionDate,
+                          )}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      </div>
+
+      {addingGuest && (
+        <AddGuest
+          onClose={() => setAddingGuest(false)}
+          onSave={addGuest}
+        />
+      )}
+
+      {paymentPerson && (
+        <GuestPayment
+          person={paymentPerson}
+          onClose={() => setPaymentPerson(null)}
+          onConfirm={registerGuestPayment}
+          onRemove={removeGuest}
+        />
+      )}
+    </main>
+  );
+}
+
+function AddGuest({
+  onClose,
+  onSave,
+}: {
+  onClose: () => void;
+  onSave: (name: string) => Promise<string | null>;
+}) {
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    const cleanName = name.trim();
+    if (!cleanName) return;
+
+    setBusy(true);
+    setError("");
+    const saveError = await onSave(cleanName);
+    setBusy(false);
+
+    if (saveError) {
+      setError(saveError);
+      return;
+    }
+
+    onClose();
+  }
+
+  return (
+    <div className="fixed inset-0 z-20 flex items-end bg-black/35 p-3 sm:items-center sm:justify-center">
+      <form
+        onSubmit={submit}
+        className="w-full rounded-2xl bg-white p-5 text-[#18322b] shadow-xl sm:max-w-sm"
+      >
+        <div className="flex items-center justify-between gap-4">
+          <h2 className="text-xl font-black">Tilføj gæst</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Luk"
+            className="h-11 w-11 rounded-xl text-3xl text-[#60756d]"
+          >
+            ×
+          </button>
+        </div>
+
+        <input
+          autoFocus
+          required
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          placeholder="Navn"
+          className="mt-4 min-h-14 w-full rounded-xl border border-[#bcc9c2] px-4 text-lg outline-none focus:border-[#28755d]"
+        />
+
+        {error && <p className="mt-3 text-sm font-semibold text-[#8d342d]">{error}</p>}
+
+        <button
+          disabled={busy || !name.trim()}
+          className="mt-4 min-h-14 w-full rounded-xl bg-[#28755d] px-4 font-black text-white disabled:opacity-40"
+        >
+          {busy ? "Gemmer…" : "Tilføj"}
+        </button>
+      </form>
+    </div>
+  );
+}
+
+function GuestPayment({
+  person,
+  onClose,
+  onConfirm,
+  onRemove,
+}: {
+  person: Person;
+  onClose: () => void;
+  onConfirm: (person: Person) => Promise<string | null>;
+  onRemove: (person: Person) => Promise<string | null>;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function confirmPayment() {
+    setBusy(true);
+    setError("");
+    const paymentError = await onConfirm(person);
+    setBusy(false);
+
+    if (paymentError) {
+      setError(paymentError);
+      return;
+    }
+
+    onClose();
+  }
+
+  async function confirmRemoval() {
+    if (!window.confirm(`Fjern ${person.name} fra listen?`)) return;
+
+    setBusy(true);
+    setError("");
+    const removeError = await onRemove(person);
+    setBusy(false);
+
+    if (removeError) {
+      setError(removeError);
+      return;
+    }
+
+    onClose();
+  }
+
+  return (
+    <div className="fixed inset-0 z-20 flex items-end bg-black/35 p-3 sm:items-center sm:justify-center">
+      <div className="w-full rounded-2xl bg-white p-5 text-[#18322b] shadow-xl sm:max-w-sm">
+        <div className="flex items-center justify-between gap-4">
+          <h2 className="text-xl font-black">Skal betale 375 kr.</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={busy}
+            aria-label="Luk"
+            className="h-11 w-11 rounded-xl text-3xl text-[#60756d]"
+          >
+            ×
+          </button>
+        </div>
+
+        <p className="mt-3 text-base font-bold">{person.name}</p>
+        <p className="mt-1 text-sm text-[#60756d]">
+          Tryk først, når MobilePay er modtaget. Personen får 10 klip og
+          registreres bagefter som fremmødt på deltagerlisten.
+        </p>
+
+        {error && <p className="mt-3 text-sm font-semibold text-[#8d342d]">{error}</p>}
+
+        <button
+          type="button"
+          onClick={confirmPayment}
+          disabled={busy}
+          className="mt-4 min-h-14 w-full rounded-xl bg-[#28755d] px-4 font-black text-white disabled:opacity-40"
+        >
+          {busy ? "Gemmer…" : "MobilePay modtaget"}
+        </button>
+
+        <button
+          type="button"
+          onClick={confirmRemoval}
+          disabled={busy}
+          className="mt-3 min-h-12 w-full rounded-xl px-4 font-bold text-[#8d342d] disabled:opacity-40"
+        >
+          Fjern fra listen
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ErrorBox({ message }: { message: string }) {
+  return (
+    <div className="mt-4 rounded-xl bg-[#fee9e5] p-4 text-sm font-semibold text-[#8d342d]">
+      {message}
+    </div>
+  );
+}
+
+function LoadingScreen() {
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-[#f4f5f1] font-bold text-[#60756d]">
+      Indlæser…
+    </main>
+  );
+}
