@@ -29,6 +29,11 @@ type TrainingSession = {
 type Attendance = { person_id: string };
 type TrialAttendance = { person_id: string; session_id: string | null };
 type TrialSession = { id: string; session_date: string };
+type HistoricalPersonState = {
+  person_id: string;
+  person_type: Person["type"];
+  balance_after: number | null;
+};
 
 const supabase = getSupabaseBrowserClient();
 
@@ -49,6 +54,10 @@ function clipBalance(person: Person) {
 
 function localDateValue(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function isHistoricalDate(value: string) {
+  return value < localDateValue(new Date());
 }
 
 function upcomingMonday() {
@@ -202,6 +211,9 @@ export default function Home() {
   const [people, setPeople] = useState<Person[]>([]);
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const [guestTrialDates, setGuestTrialDates] = useState<Record<string, string>>({});
+  const [historicalStates, setHistoricalStates] = useState<
+    Record<string, HistoricalPersonState>
+  >({});
   const [error, setError] = useState("");
   const [addingGuest, setAddingGuest] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -274,6 +286,29 @@ export default function Home() {
     const loadedPeople = ((peopleResult.data ?? []) as Person[]).filter(
       (person) => !isLegacyDemoGuest(person),
     );
+    let visiblePeople = loadedPeople;
+    const nextHistoricalStates: Record<string, HistoricalPersonState> = {};
+
+    if (isHistoricalDate(sessionDate)) {
+      const { data, error: historyError } = await supabase.rpc(
+        "get_historical_people_state",
+        {
+          p_class_id: selectedClass.id,
+          p_session_date: sessionDate,
+        },
+      );
+
+      if (historyError) {
+        setError(friendlyError(historyError.message));
+      } else {
+        for (const row of (data ?? []) as HistoricalPersonState[]) {
+          nextHistoricalStates[row.person_id] = row;
+        }
+        visiblePeople = loadedPeople.filter(
+          (person) => nextHistoricalStates[person.id],
+        );
+      }
+    }
 
     const foundSession = (sessionResult.data ?? null) as TrainingSession | null;
     const trialRows = (trialResult.data ?? []) as TrialAttendance[];
@@ -318,7 +353,8 @@ export default function Home() {
       }
     }
 
-    setPeople(loadedPeople);
+    setPeople(visiblePeople);
+    setHistoricalStates(nextHistoricalStates);
     setTrainingSession(foundSession);
     setGuestTrialDates(nextTrialDates);
 
@@ -397,7 +433,23 @@ export default function Home() {
   const sortedPeople = useMemo(() => {
     if (!selectedClass) return [];
 
-    const visiblePeople = uniquePeopleByName(people);
+    const visiblePeople = uniquePeopleByName(
+      people.map((person) => {
+        const historicalState = historicalStates[person.id];
+        if (!historicalState) return person;
+
+        const balance = historicalState.balance_after;
+        return {
+          ...person,
+          type: historicalState.person_type,
+          balance,
+          payment_status:
+            historicalState.person_type === "gæst" || (balance ?? 0) <= 0
+              ? "skal_betale"
+              : "ok",
+        };
+      }),
+    );
 
     return visiblePeople.sort((a, b) => {
       if (a.type !== b.type) return a.type === "gæst" ? -1 : 1;
@@ -410,7 +462,12 @@ export default function Home() {
       const balanceDifference = clipBalance(b) - clipBalance(a);
       return balanceDifference || a.name.localeCompare(b.name, "da");
     });
-  }, [people, selectedClass]);
+  }, [historicalStates, people, selectedClass]);
+
+  const currentPeopleById = useMemo(
+    () => new Map(people.map((person) => [person.id, person])),
+    [people],
+  );
 
   useEffect(() => {
     if (!recentlyPaidId) return;
@@ -698,7 +755,9 @@ export default function Home() {
                     key={person.id}
                     id={`person-${person.id}`}
                     type="button"
-                    onClick={() => toggleAttendance(person)}
+                    onClick={() =>
+                      toggleAttendance(currentPeopleById.get(person.id) ?? person)
+                    }
                     disabled={Boolean(savingId) || pageLoading}
                     aria-pressed={checked}
                     className={`grid min-h-16 w-full grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 text-left transition ${
