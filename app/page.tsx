@@ -433,6 +433,12 @@ export default function Home() {
 
     // Ugyldiggør straks en igangværende indlæsning fra det gamle hold.
     loadRequest.current += 1;
+    setCorrectionMode(false);
+    setCorrectionPerson(null);
+    setCorrectionWarningOpen(false);
+    setCancellationAction(null);
+    setShowMemberAdmin(false);
+    setInactiveMembers([]);
 
     const nextIndex = (classIndex + direction + classes.length) % classes.length;
     const nextClass = classes[nextIndex];
@@ -471,6 +477,10 @@ export default function Home() {
         return `${clean} findes allerede på listen. Brug den eksisterende person i stedet for at oprette en ny.`;
       }
       return personResult.error.message;
+    }
+
+    if (!personResult.data?.id) {
+      return "Gæsten blev oprettet uden et gyldigt person-id.";
     }
 
     const membershipResult = await supabase.from("class_memberships").upsert({
