@@ -68,27 +68,21 @@ function normalizedName(value: string) {
 }
 
 function preferredPerson(existing: Person, candidate: Person) {
-  if (existing.type !== candidate.type) {
-    return existing.type === "medlem" ? existing : candidate;
-  }
-
+  if (existing.type !== candidate.type) return existing.type === "medlem" ? existing : candidate;
   if (existing.payment_status !== candidate.payment_status) {
     if (existing.payment_status === "blokeret") return existing;
     if (candidate.payment_status === "blokeret") return candidate;
   }
-
   return (candidate.balance ?? -2) > (existing.balance ?? -2) ? candidate : existing;
 }
 
 function uniquePeople(items: Person[]) {
   const byName = new Map<string, Person>();
-
   for (const person of items) {
     const key = normalizedName(person.name);
     const existing = byName.get(key);
     byName.set(key, existing ? preferredPerson(existing, person) : person);
   }
-
   return [...byName.values()];
 }
 
@@ -103,6 +97,7 @@ export default function Home() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [addingGuest, setAddingGuest] = useState(false);
+  const [paymentPerson, setPaymentPerson] = useState<Person | null>(null);
 
   const selectedClass = classes[classIndex] ?? null;
 
@@ -179,7 +174,11 @@ export default function Home() {
 
   async function toggle(person: Person) {
     if (busyId) return;
-    if (person.type === "medlem" && (person.balance ?? 0) <= 0) return;
+
+    if (person.type === "medlem" && (person.balance ?? 0) <= 0) {
+      setPaymentPerson(person);
+      return;
+    }
 
     setBusyId(person.id);
     setError("");
@@ -190,7 +189,8 @@ export default function Home() {
       return;
     }
 
-    const result = checked.has(person.id)
+    const wasChecked = checked.has(person.id);
+    const result = wasChecked
       ? await supabase.rpc("undo_attendance_for_session", {
           p_person_id: person.id,
           p_session_id: activeSession.id,
@@ -203,7 +203,33 @@ export default function Home() {
 
     setBusyId(null);
     if (result.error) return setError(result.error.message);
+
     await loadPage();
+
+    if (!wasChecked && person.type === "medlem" && person.balance === 1) {
+      setPaymentPerson({ ...person, balance: 0, payment_status: "skal_betale" });
+    }
+  }
+
+  async function registerPayment(person: Person) {
+    setBusyId(person.id);
+    setError("");
+
+    const result = await supabase.rpc("purchase_clips", {
+      p_person_id: person.id,
+      p_clips: 10,
+      p_note: "Betaling registreret af Randi",
+    });
+
+    setBusyId(null);
+    if (result.error) {
+      setError(result.error.message);
+      return false;
+    }
+
+    setPaymentPerson(null);
+    await loadPage();
+    return true;
   }
 
   function changeClass(direction: -1 | 1) {
@@ -230,9 +256,7 @@ export default function Home() {
   async function addGuest(name: string) {
     const clean = name.trim();
     if (!clean) return "Navn mangler";
-
-    const exists = people.some((person) => normalizedName(person.name) === normalizedName(clean));
-    if (exists) return "Personen står allerede på listen";
+    if (people.some((person) => normalizedName(person.name) === normalizedName(clean))) return "Personen står allerede på listen";
 
     const result = await supabase.from("people").insert({
       name: clean,
@@ -255,9 +279,7 @@ export default function Home() {
       <div className="mx-auto max-w-xl">
         <nav className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
           <button onClick={() => changeClass(-1)} className="min-h-12 justify-self-start text-sm font-bold text-[#28755d]">← Forrige hold</button>
-          <h1 className="whitespace-nowrap text-center text-xl font-black">
-            {weekday(sessionDate)} {time(selectedClass.start_time)}–{time(selectedClass.end_time)}
-          </h1>
+          <h1 className="whitespace-nowrap text-center text-xl font-black">{weekday(sessionDate)} {time(selectedClass.start_time)}–{time(selectedClass.end_time)}</h1>
           <button onClick={() => changeClass(1)} className="min-h-12 justify-self-end text-sm font-bold text-[#28755d]">Næste hold →</button>
         </nav>
 
@@ -266,7 +288,6 @@ export default function Home() {
             <button onClick={() => changeDate(-1)} className="min-h-10 justify-self-start text-sm font-bold text-[#28755d]">←</button>
             <div className="text-center">
               <div className="text-lg font-black text-[#18322b]">{weekday(sessionDate)} {displayDate(sessionDate)}</div>
-              <div className="text-xs font-semibold text-[#60756d] mt-1">Uge {Math.ceil((new Date(sessionDate + 'T12:00:00').getDate() + new Date(new Date(sessionDate + 'T12:00:00').getFullYear(), new Date(sessionDate + 'T12:00:00').getMonth(), 1).getDay() - 1) / 7)}</div>
             </div>
             <button onClick={() => changeDate(1)} className="min-h-10 justify-self-end text-sm font-bold text-[#28755d]">→</button>
           </div>
@@ -285,11 +306,11 @@ export default function Home() {
                 key={person.id}
                 onClick={() => void toggle(person)}
                 disabled={Boolean(busyId)}
-                className={`grid min-h-16 w-full grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-3 border-b border-[#e8ece8] px-4 py-3 text-left ${isChecked ? "bg-[#eef1ee] opacity-45" : "bg-white"}`}
+                className={`grid min-h-16 w-full grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-3 border-b border-[#e8ece8] px-4 py-3 text-left ${blocked ? "bg-[#fff1ef]" : isChecked ? "bg-[#eef1ee] opacity-45" : "bg-white"}`}
               >
                 <span className={`flex h-7 w-7 items-center justify-center rounded-md border-2 text-base font-black ${isChecked ? "border-[#28755d] bg-[#28755d] text-white" : blocked ? "border-[#d0a155] bg-[#fff4df] text-[#8b5605]" : "border-[#aebdb5] text-transparent"}`}>{blocked ? "!" : "✓"}</span>
                 <span className="truncate text-lg font-bold">{person.name}</span>
-                <span className={`whitespace-nowrap text-base font-bold ${blocked || person.balance === 1 ? "text-[#b42318]" : "text-[#526960]"}`}>{busyId === person.id ? "…" : status(person)}</span>
+                <span className={`whitespace-nowrap text-base font-bold ${blocked ? "text-[#b42318]" : person.balance === 1 ? "text-[#c27600]" : "text-[#28755d]"}`}>{busyId === person.id ? "…" : status(person)}</span>
               </button>
             );
           })}
@@ -297,6 +318,14 @@ export default function Home() {
       </div>
 
       {addingGuest && <GuestDialog onClose={() => setAddingGuest(false)} onSave={addGuest} />}
+      {paymentPerson && (
+        <PaymentDialog
+          person={paymentPerson}
+          busy={busyId === paymentPerson.id}
+          onClose={() => setPaymentPerson(null)}
+          onConfirm={registerPayment}
+        />
+      )}
     </main>
   );
 }
@@ -324,6 +353,20 @@ function GuestDialog({ onClose, onSave }: { onClose: () => void; onSave: (name: 
         <button disabled={busy} className="mt-4 min-h-14 w-full rounded-xl bg-[#28755d] font-black text-white">{busy ? "Gemmer…" : "Tilføj"}</button>
         <button type="button" onClick={onClose} className="mt-2 min-h-12 w-full font-bold text-[#60756d]">Annuller</button>
       </form>
+    </div>
+  );
+}
+
+function PaymentDialog({ person, busy, onClose, onConfirm }: { person: Person; busy: boolean; onClose: () => void; onConfirm: (person: Person) => Promise<boolean> }) {
+  return (
+    <div className="fixed inset-0 z-30 flex items-end bg-black/35 p-3 sm:items-center sm:justify-center">
+      <div className="w-full rounded-2xl bg-white p-5 text-[#18322b] shadow-xl sm:max-w-sm">
+        <h2 className="text-xl font-black">{person.name}</h2>
+        <p className="mt-3 text-base font-bold text-[#b42318]">0 klip · betaling mangler</p>
+        <p className="mt-2 text-sm text-[#60756d]">Har personen betalt 375 kr.?</p>
+        <button type="button" disabled={busy} onClick={() => void onConfirm(person)} className="mt-4 min-h-14 w-full rounded-xl bg-[#28755d] px-4 font-black text-white disabled:opacity-50">{busy ? "Gemmer…" : "Registrér betaling"}</button>
+        <button type="button" disabled={busy} onClick={onClose} className="mt-2 min-h-12 w-full font-bold text-[#60756d]">Luk</button>
+      </div>
     </div>
   );
 }
