@@ -137,6 +137,7 @@ export default function Home() {
   const [correctionMode, setCorrectionMode] = useState(false);
   const [correctionPerson, setCorrectionPerson] = useState<Person | null>(null);
   const loadRequest = useRef(0);
+  const attendanceToggleInFlight = useRef(false);
 
   const selectedClass = classes[classIndex] ?? null;
   const todayDate = localDate(new Date());
@@ -277,36 +278,32 @@ export default function Home() {
   }
 
   async function toggle(person: Person) {
-    if (busyId || !isEditable) return;
+    if (attendanceToggleInFlight.current || busyId || !isEditable) return;
 
     if (person.type === "medlem" && (person.balance ?? 0) <= 0) {
       setPaymentPerson(person);
       return;
     }
 
+    attendanceToggleInFlight.current = true;
     setBusyId(person.id);
     setError("");
 
     const activeSession = await ensureSession();
     if (!activeSession) {
+      attendanceToggleInFlight.current = false;
       setBusyId(null);
       return;
     }
 
-    const wasChecked = checkedSessionId === activeSession.id && checked.has(person.id);
-    const result = wasChecked
-      ? await supabase.rpc("undo_attendance_for_session", {
-          p_person_id: person.id,
-          p_session_id: activeSession.id,
-        })
-      : await supabase.rpc("register_attendance_for_session", {
-          p_person_id: person.id,
-          p_session_id: activeSession.id,
-          p_type: person.type === "gæst" ? "prøvetime" : "normal",
-        });
+    const result = await supabase.rpc("toggle_attendance", {
+      p_person_id: person.id,
+      p_session_id: activeSession.id,
+    });
 
-    setBusyId(null);
     if (result.error) {
+      attendanceToggleInFlight.current = false;
+      setBusyId(null);
       if (result.error.message.includes("PAYMENT_REQUIRED")) {
         setPaymentPerson(person);
         return;
@@ -315,8 +312,10 @@ export default function Home() {
     }
 
     await loadPage();
+    attendanceToggleInFlight.current = false;
+    setBusyId(null);
 
-    if (!wasChecked && person.type === "medlem" && person.balance === 1) {
+    if (result.data?.attended && person.type === "medlem" && person.balance === 1) {
       setPaymentPerson({ ...person, balance: 0, payment_status: "skal_betale" });
     }
   }
