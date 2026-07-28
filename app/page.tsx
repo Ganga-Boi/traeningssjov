@@ -42,13 +42,13 @@ function moveDate(value: string, days: number) {
 }
 
 function displayDate(value: string) {
-  const [y, m, d] = value.split("-");
-  return `${d}-${m}-${y}`;
+  const [year, month, day] = value.split("-");
+  return `${day}-${month}-${year}`;
 }
 
 function time(value: string) {
-  const [h, m] = value.slice(0, 5).split(":");
-  return m === "00" ? String(Number(h)) : `${Number(h)}.${m}`;
+  const [hours, minutes] = value.slice(0, 5).split(":");
+  return minutes === "00" ? String(Number(hours)) : `${Number(hours)}.${minutes}`;
 }
 
 function weekday(value: string) {
@@ -135,7 +135,10 @@ export default function Home() {
     const found = (sessionResult.data ?? null) as TrainingSession | null;
     setSession(found);
 
-    if (!found) return setChecked(new Set());
+    if (!found) {
+      setChecked(new Set());
+      return;
+    }
 
     const attendance = await supabase
       .from("attendance")
@@ -159,14 +162,17 @@ export default function Home() {
   async function ensureSession() {
     if (session) return session;
     if (!selectedClass) return null;
+
     const result = await supabase.rpc("get_or_create_session", {
       p_class_id: selectedClass.id,
       p_session_date: sessionDate,
     });
+
     if (result.error) {
       setError(result.error.message);
       return null;
     }
+
     const created = result.data as TrainingSession;
     setSession(created);
     return created;
@@ -232,22 +238,23 @@ export default function Home() {
     return true;
   }
 
-  function changeClass(direction: -1 | 1) {
+  function changeTraining(direction: -1 | 1) {
     if (!selectedClass || classes.length === 0) return;
+
     const nextIndex = (classIndex + direction + classes.length) % classes.length;
     const nextClass = classes[nextIndex];
-    const delta = direction === 1
-      ? (nextClass.weekday - selectedClass.weekday + 7) % 7
-      : -((selectedClass.weekday - nextClass.weekday + 7) % 7);
+
+    let delta: number;
+    if (direction === 1) {
+      delta = (nextClass.weekday - selectedClass.weekday + 7) % 7;
+      if (delta === 0 && nextIndex <= classIndex) delta = 7;
+    } else {
+      delta = -((selectedClass.weekday - nextClass.weekday + 7) % 7);
+      if (delta === 0 && nextIndex >= classIndex) delta = -7;
+    }
+
     setClassIndex(nextIndex);
     setSessionDate(moveDate(sessionDate, delta));
-    setSession(null);
-    setChecked(new Set());
-    setError("");
-  }
-
-  function changeDate(direction: -1 | 1) {
-    setSessionDate(moveDate(sessionDate, direction));
     setSession(null);
     setChecked(new Set());
     setError("");
@@ -256,7 +263,9 @@ export default function Home() {
   async function addGuest(name: string) {
     const clean = name.trim();
     if (!clean) return "Navn mangler";
-    if (people.some((person) => normalizedName(person.name) === normalizedName(clean))) return "Personen står allerede på listen";
+    if (people.some((person) => normalizedName(person.name) === normalizedName(clean))) {
+      return "Personen står allerede på listen";
+    }
 
     const result = await supabase.from("people").insert({
       name: clean,
@@ -271,27 +280,27 @@ export default function Home() {
     return null;
   }
 
-  if (loading) return <main className="flex min-h-screen items-center justify-center bg-[#f4f5f1]">Indlæser…</main>;
-  if (!selectedClass) return <main className="min-h-screen bg-[#f4f5f1] p-6">Ingen træningshold fundet.</main>;
+  if (loading) {
+    return <main className="flex min-h-screen items-center justify-center bg-[#f4f5f1]">Indlæser…</main>;
+  }
+
+  if (!selectedClass) {
+    return <main className="min-h-screen bg-[#f4f5f1] p-6">Ingen træningshold fundet.</main>;
+  }
 
   return (
     <main className="min-h-screen bg-[#f4f5f1] px-3 py-5 text-[#18322b] sm:px-5 sm:py-8">
       <div className="mx-auto max-w-xl">
-        <nav className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-          <button onClick={() => changeClass(-1)} className="min-h-12 justify-self-start text-sm font-bold text-[#28755d]">← Forrige hold</button>
-          <h1 className="whitespace-nowrap text-center text-xl font-black">{weekday(sessionDate)} {time(selectedClass.start_time)}–{time(selectedClass.end_time)}</h1>
-          <button onClick={() => changeClass(1)} className="min-h-12 justify-self-end text-sm font-bold text-[#28755d]">Næste hold →</button>
-        </nav>
-
-        <div className="mt-4 rounded-2xl border border-[#d9e0da] bg-white p-4 shadow-sm">
-          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-            <button onClick={() => changeDate(-1)} className="min-h-10 justify-self-start text-sm font-bold text-[#28755d]">←</button>
-            <div className="text-center">
-              <div className="text-lg font-black text-[#18322b]">{weekday(sessionDate)} {displayDate(sessionDate)}</div>
-            </div>
-            <button onClick={() => changeDate(1)} className="min-h-10 justify-self-end text-sm font-bold text-[#28755d]">→</button>
+        <nav className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 rounded-2xl border border-[#d9e0da] bg-white p-4 shadow-sm">
+          <button onClick={() => changeTraining(-1)} className="min-h-12 justify-self-start text-sm font-bold text-[#28755d]">← Forrige</button>
+          <div className="text-center">
+            <h1 className="whitespace-nowrap text-xl font-black">
+              {weekday(sessionDate)} {time(selectedClass.start_time)}–{time(selectedClass.end_time)}
+            </h1>
+            <p className="mt-1 text-sm font-semibold text-[#60756d]">{displayDate(sessionDate)}</p>
           </div>
-        </div>
+          <button onClick={() => changeTraining(1)} className="min-h-12 justify-self-end text-sm font-bold text-[#28755d]">Næste →</button>
+        </nav>
 
         {error && <div className="mt-4 rounded-xl bg-[#fee9e5] p-4 text-sm font-semibold text-[#8d342d]">{error}</div>}
 
@@ -301,12 +310,13 @@ export default function Home() {
           {sortedPeople.map((person) => {
             const isChecked = checked.has(person.id);
             const blocked = person.type === "medlem" && (person.balance ?? 0) <= 0;
+
             return (
               <button
                 key={person.id}
                 onClick={() => void toggle(person)}
                 disabled={Boolean(busyId)}
-                className={`grid min-h-16 w-full grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-3 border-b border-[#e8ece8] px-4 py-3 text-left ${blocked ? "bg-[#fff1ef]" : isChecked ? "bg-[#eef1ee] opacity-45" : "bg-white"}`}
+                className={`grid min-h-16 w-full grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-3 border-b border-[#e8ece8] px-4 py-3 text-left ${blocked ? "bg-[#fff1ef]" : isChecked ? "bg-[#eef1ee]" : "bg-white"}`}
               >
                 <span className={`flex h-7 w-7 items-center justify-center rounded-md border-2 text-base font-black ${isChecked ? "border-[#28755d] bg-[#28755d] text-white" : blocked ? "border-[#d0a155] bg-[#fff4df] text-[#8b5605]" : "border-[#aebdb5] text-transparent"}`}>{blocked ? "!" : "✓"}</span>
                 <span className="truncate text-lg font-bold">{person.name}</span>
