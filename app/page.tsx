@@ -120,6 +120,7 @@ export default function Home() {
   const [showMemberAdmin, setShowMemberAdmin] = useState(false);
   const [inactiveMembers, setInactiveMembers] = useState<InactiveMember[]>([]);
   const [deactivatePerson, setDeactivatePerson] = useState<Person | null>(null);
+  const [cancellationAction, setCancellationAction] = useState<"cancel" | "restore" | null>(null);
   const loadRequest = useRef(0);
 
   const selectedClass = classes[classIndex] ?? null;
@@ -376,6 +377,28 @@ export default function Home() {
     await Promise.all([loadPage(), loadInactiveMembers()]);
   }
 
+  async function updateCancellation(cancelled: boolean) {
+    if (!selectedClass) return;
+    setBusyId("session");
+    setError("");
+
+    const result = await supabase.rpc("set_session_cancelled", {
+      p_class_id: selectedClass.id,
+      p_session_date: sessionDate,
+      p_cancelled: cancelled,
+    });
+
+    setBusyId(null);
+    if (result.error) {
+      setError(result.error.message);
+      return;
+    }
+
+    setCancellationAction(null);
+    setSession(result.data as TrainingSession);
+    await loadPage();
+  }
+
   function changeTraining(direction: -1 | 1) {
     if (!selectedClass || classes.length === 0) return;
 
@@ -462,7 +485,22 @@ export default function Home() {
         {isPast && <p className="mt-3 text-center text-sm font-semibold text-[#60756d]">Historik · kun visning</p>}
         {error && <div className="mt-4 rounded-xl bg-[#fee9e5] p-4 text-sm font-semibold text-[#8d342d]">{error}</div>}
 
-        {isEditable && (
+        {session?.status === "aflyst" && (
+          <div className="mt-5 rounded-2xl border border-[#e1b4ae] bg-[#fff1ef] p-5 text-center">
+            <p className="text-lg font-black text-[#9b3028]">Denne træning er aflyst</p>
+            {sessionDate === todayDate && (
+              <button
+                type="button"
+                onClick={() => setCancellationAction("restore")}
+                className="mt-3 min-h-11 font-bold text-[#28755d]"
+              >
+                Fortryd aflysning
+              </button>
+            )}
+          </div>
+        )}
+
+        {isEditable && session?.status !== "aflyst" && (
           <button
             onClick={() => setAddingGuest(true)}
             className="mt-5 inline-flex min-h-12 items-center rounded-xl border border-[#b8cec4] bg-white px-4 text-base font-black text-[#28755d] shadow-sm transition hover:bg-[#eef6f2] active:scale-[0.98]"
@@ -472,6 +510,17 @@ export default function Home() {
           </button>
         )}
 
+        {isEditable && (!session || session.status === "planlagt") && (
+          <button
+            type="button"
+            onClick={() => setCancellationAction("cancel")}
+            className="ml-3 min-h-12 text-sm font-bold text-[#9b3028]"
+          >
+            Aflys denne træning
+          </button>
+        )}
+
+        {session?.status !== "aflyst" && (
         <section className="mt-2 overflow-hidden rounded-2xl border border-[#d9e0da] bg-white shadow-sm">
           {sortedPeople.map((person) => {
             const isChecked = checked.has(person.id);
@@ -492,6 +541,7 @@ export default function Home() {
           })}
           {sortedPeople.length === 0 && <p className="p-6 text-center text-sm font-semibold text-[#60756d]">Ingen deltagere på dette hold endnu.</p>}
         </section>
+        )}
 
         {isEditable && (
           <section className="mt-5">
@@ -565,6 +615,21 @@ export default function Home() {
           onConfirm={() => void confirmDeactivateMember(deactivatePerson)}
         />
       )}
+      {cancellationAction && (
+        <ConfirmDialog
+          title={cancellationAction === "cancel" ? "Aflys træning" : "Fortryd aflysning"}
+          message={
+            cancellationAction === "cancel"
+              ? `Er du sikker på, at træningen den ${displayDate(sessionDate)} skal aflyses?`
+              : `Vil du sætte træningen den ${displayDate(sessionDate)} tilbage til planlagt?`
+          }
+          confirmLabel={cancellationAction === "cancel" ? "Aflys træning" : "Fortryd aflysning"}
+          busy={busyId === "session"}
+          tone={cancellationAction === "cancel" ? "danger" : "primary"}
+          onClose={() => setCancellationAction(null)}
+          onConfirm={() => void updateCancellation(cancellationAction === "cancel")}
+        />
+      )}
     </main>
   );
 }
@@ -576,6 +641,7 @@ function ConfirmDialog({
   busy,
   onClose,
   onConfirm,
+  tone = "danger",
 }: {
   title: string;
   message: string;
@@ -583,6 +649,7 @@ function ConfirmDialog({
   busy: boolean;
   onClose: () => void;
   onConfirm: () => void;
+  tone?: "danger" | "primary";
 }) {
   return (
     <div className="fixed inset-0 z-40 flex items-end bg-black/35 p-3 sm:items-center sm:justify-center">
@@ -593,7 +660,7 @@ function ConfirmDialog({
           type="button"
           disabled={busy}
           onClick={onConfirm}
-          className="mt-4 min-h-14 w-full rounded-xl bg-[#9b3028] px-4 font-black text-white disabled:opacity-50"
+          className={`mt-4 min-h-14 w-full rounded-xl px-4 font-black text-white disabled:opacity-50 ${tone === "danger" ? "bg-[#9b3028]" : "bg-[#28755d]"}`}
         >
           {busy ? "Gemmer…" : confirmLabel}
         </button>
