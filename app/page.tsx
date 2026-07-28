@@ -317,6 +317,7 @@ export default function Home() {
     setClassIndex(nextIndex);
     setSessionDate(moveDate(sessionDate, delta));
     setSession(null);
+    setChecked(new Set());
     setError("");
   }
 
