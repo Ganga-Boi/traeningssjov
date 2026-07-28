@@ -35,7 +35,7 @@ type SnapshotRow = {
 type NextTraining = {
   index: number;
   date: string;
-  distance: number;
+  startsAt: number;
 };
 
 function localDate(date: Date) {
@@ -71,25 +71,28 @@ function status(person: Person) {
 }
 
 function nextTraining(classes: TrainingClass[]): NextTraining | null {
-  const today = new Date();
-  const jsDay = today.getDay();
-  const currentWeekday = jsDay === 0 ? 7 : jsDay;
-
+  const now = new Date();
   let best: NextTraining | null = null;
 
   for (let index = 0; index < classes.length; index += 1) {
     const trainingClass = classes[index];
-    const distance = (trainingClass.weekday - currentWeekday + 7) % 7;
-    const date = new Date(today);
-    date.setHours(12, 0, 0, 0);
-    date.setDate(today.getDate() + distance);
+    const currentWeekday = now.getDay() === 0 ? 7 : now.getDay();
+    let distance = (trainingClass.weekday - currentWeekday + 7) % 7;
+    const [hours, minutes] = trainingClass.start_time.slice(0, 5).split(":").map(Number);
+    const date = new Date(now);
+    date.setDate(now.getDate() + distance);
+    date.setHours(hours, minutes, 0, 0);
+
+    if (date <= now) {
+      distance += 7;
+      date.setDate(date.getDate() + 7);
+    }
 
     if (
       best === null ||
-      distance < best.distance ||
-      (distance === best.distance && trainingClass.start_time < classes[best.index].start_time)
+      date.getTime() < best.startsAt
     ) {
-      best = { index, date: localDate(date), distance };
+      best = { index, date: localDate(date), startsAt: date.getTime() };
     }
   }
 
@@ -172,8 +175,15 @@ export default function Home() {
     setSession((sessionResult.data ?? null) as TrainingSession | null);
   }, [selectedClass, sessionDate]);
 
-  useEffect(() => { void loadClasses(); }, [loadClasses]);
-  useEffect(() => { void loadPage(); }, [loadPage]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => void loadClasses(), 0);
+    return () => window.clearTimeout(timer);
+  }, [loadClasses]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => void loadPage(), 0);
+    return () => window.clearTimeout(timer);
+  }, [loadPage]);
 
   const sortedPeople = useMemo(() => [...people].sort((a, b) => {
     if (a.type !== b.type) return a.type === "gæst" ? -1 : 1;
@@ -229,7 +239,13 @@ export default function Home() {
         });
 
     setBusyId(null);
-    if (result.error) return setError(result.error.message);
+    if (result.error) {
+      if (result.error.message.includes("PAYMENT_REQUIRED")) {
+        setPaymentPerson(person);
+        return;
+      }
+      return setError(result.error.message);
+    }
 
     await loadPage();
 
@@ -242,8 +258,9 @@ export default function Home() {
     setBusyId(person.id);
     setError("");
 
-    const result = await supabase.rpc("purchase_clips", {
+    const result = await supabase.rpc("register_payment", {
       p_person_id: person.id,
+      p_amount_ore: 37500,
       p_clips: 10,
       p_note: "Betaling registreret af Randi",
     });
@@ -341,7 +358,15 @@ export default function Home() {
         {isPast && <p className="mt-3 text-center text-sm font-semibold text-[#60756d]">Historik · kun visning</p>}
         {error && <div className="mt-4 rounded-xl bg-[#fee9e5] p-4 text-sm font-semibold text-[#8d342d]">{error}</div>}
 
-        {isEditable && <button onClick={() => setAddingGuest(true)} className="mt-5 min-h-12 px-2 text-base font-black text-[#28755d]">+ Gæst</button>}
+        {isEditable && (
+          <button
+            onClick={() => setAddingGuest(true)}
+            className="mt-5 inline-flex min-h-12 items-center rounded-xl border border-[#b8cec4] bg-white px-4 text-base font-black text-[#28755d] shadow-sm transition hover:bg-[#eef6f2] active:scale-[0.98]"
+          >
+            <span className="mr-2 text-xl leading-none">+</span>
+            Tilføj gæst
+          </button>
+        )}
 
         <section className="mt-2 overflow-hidden rounded-2xl border border-[#d9e0da] bg-white shadow-sm">
           {sortedPeople.map((person) => {
