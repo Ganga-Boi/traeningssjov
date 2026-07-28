@@ -11,7 +11,7 @@ type Person = {
   name: string;
   type: "gæst" | "medlem";
   balance: number | null;
-  payment_status: "ok" | "skal_betale" | "blokeret";
+  payment_status: "ok" | "skal_betale";
 };
 
 type TrainingClass = {
@@ -28,7 +28,7 @@ type SnapshotRow = {
   person_id: string;
   name: string;
   person_type: "gæst" | "medlem";
-  payment_status: "ok" | "skal_betale" | "blokeret";
+  payment_status: "ok" | "skal_betale";
   clip_count: number | null;
   attended: boolean;
 };
@@ -66,7 +66,6 @@ function weekday(value: string) {
 
 function status(person: Person) {
   if (person.type === "gæst") return "Gæst";
-  if (person.balance === -1 || person.payment_status === "blokeret") return "Kredit";
   if ((person.balance ?? 0) === 0) return "0 klip · betal";
   return `${person.balance} klip`;
 }
@@ -226,6 +225,9 @@ export default function Home() {
 
   const sortedPeople = useMemo(() => [...people].sort((a, b) => {
     if (a.type !== b.type) return a.type === "gæst" ? -1 : 1;
+    if (a.type === "medlem" && b.type === "medlem" && a.balance !== b.balance) {
+      return (b.balance ?? 0) - (a.balance ?? 0);
+    }
     return a.name.localeCompare(b.name, "da");
   }), [people]);
 
