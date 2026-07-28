@@ -72,6 +72,7 @@ function weekday(value: string) {
 
 function status(person: Person) {
   if (person.type === "gæst") return "Gæst";
+  if (person.balance === null) return "—";
   if ((person.balance ?? 0) === 0) return "0 klip · betal";
   return `${person.balance} klip`;
 }
@@ -121,6 +122,9 @@ export default function Home() {
   const [inactiveMembers, setInactiveMembers] = useState<InactiveMember[]>([]);
   const [deactivatePerson, setDeactivatePerson] = useState<Person | null>(null);
   const [cancellationAction, setCancellationAction] = useState<"cancel" | "restore" | null>(null);
+  const [correctionWarningOpen, setCorrectionWarningOpen] = useState(false);
+  const [correctionMode, setCorrectionMode] = useState(false);
+  const [correctionPerson, setCorrectionPerson] = useState<Person | null>(null);
   const loadRequest = useRef(0);
 
   const selectedClass = classes[classIndex] ?? null;
@@ -399,6 +403,31 @@ export default function Home() {
     await loadPage();
   }
 
+  async function correctHistoricalAttendance(person: Person) {
+    if (!session) {
+      setError("Den historiske session findes ikke.");
+      return;
+    }
+
+    setBusyId(person.id);
+    setError("");
+
+    const result = await supabase.rpc("correct_historical_attendance", {
+      p_person_id: person.id,
+      p_session_id: session.id,
+      p_should_attend: !checked.has(person.id),
+    });
+
+    setBusyId(null);
+    if (result.error) {
+      setError(result.error.message);
+      return;
+    }
+
+    setCorrectionPerson(null);
+    await loadPage();
+  }
+
   function changeTraining(direction: -1 | 1) {
     if (!selectedClass || classes.length === 0) return;
 
@@ -475,7 +504,20 @@ export default function Home() {
           <button onClick={() => changeTraining(1)} className="min-h-12 justify-self-end text-sm font-bold text-[#28755d]">Næste →</button>
         </nav>
 
-        {isPast && <p className="mt-3 text-center text-sm font-semibold text-[#60756d]">Historik · kun visning</p>}
+        {isPast && (
+          <div className="mt-3 text-center">
+            <p className="text-sm font-semibold text-[#60756d]">
+              {correctionMode ? "Historik · rettelsestilstand" : "Historik · kun visning"}
+            </p>
+            <button
+              type="button"
+              onClick={() => correctionMode ? setCorrectionMode(false) : setCorrectionWarningOpen(true)}
+              className="mt-1 min-h-10 text-sm font-bold text-[#28755d]"
+            >
+              {correctionMode ? "Afslut rettelse" : "Ret registrering"}
+            </button>
+          </div>
+        )}
         {error && <div className="mt-4 rounded-xl bg-[#fee9e5] p-4 text-sm font-semibold text-[#8d342d]">{error}</div>}
 
         {session?.status === "aflyst" && (
@@ -522,8 +564,8 @@ export default function Home() {
             return (
               <button
                 key={person.id}
-                onClick={() => void toggle(person)}
-                disabled={Boolean(busyId) || !isEditable}
+                onClick={() => correctionMode ? setCorrectionPerson(person) : void toggle(person)}
+                disabled={Boolean(busyId) || (!isEditable && !correctionMode)}
                 className={`grid min-h-16 w-full grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-3 border-b border-[#e8ece8] px-4 py-3 text-left ${blocked ? "bg-[#fff1ef]" : isChecked ? "bg-[#eef1ee]" : "bg-white"}`}
               >
                 <span className={`flex h-7 w-7 items-center justify-center rounded-md border-2 text-base font-black ${isChecked ? "border-[#28755d] bg-[#28755d] text-white" : blocked ? "border-[#d0a155] bg-[#fff4df] text-[#8b5605]" : "border-[#aebdb5] text-transparent"}`}>{blocked ? "!" : "✓"}</span>
@@ -621,6 +663,35 @@ export default function Home() {
           tone={cancellationAction === "cancel" ? "danger" : "primary"}
           onClose={() => setCancellationAction(null)}
           onConfirm={() => void updateCancellation(cancellationAction === "cancel")}
+        />
+      )}
+      {correctionWarningOpen && (
+        <ConfirmDialog
+          title="Ret tidligere registrering"
+          message={`Du er ved at ændre en tidligere registrering for ${displayDate(sessionDate)}. Dette påvirker personens kliphistorik permanent. Fortsæt?`}
+          confirmLabel="Fortsæt"
+          busy={false}
+          tone="primary"
+          onClose={() => setCorrectionWarningOpen(false)}
+          onConfirm={() => {
+            setCorrectionWarningOpen(false);
+            setCorrectionMode(true);
+          }}
+        />
+      )}
+      {correctionPerson && (
+        <ConfirmDialog
+          title="Bekræft rettelse"
+          message={
+            checked.has(correctionPerson.id)
+              ? `Fjern det historiske fremmøde for ${correctionPerson.name} den ${displayDate(sessionDate)}?`
+              : `Tilføj historisk fremmøde for ${correctionPerson.name} den ${displayDate(sessionDate)}?`
+          }
+          confirmLabel={checked.has(correctionPerson.id) ? "Fjern fremmøde" : "Tilføj fremmøde"}
+          busy={busyId === correctionPerson.id}
+          tone={checked.has(correctionPerson.id) ? "danger" : "primary"}
+          onClose={() => setCorrectionPerson(null)}
+          onConfirm={() => void correctHistoricalAttendance(correctionPerson)}
         />
       )}
     </main>
