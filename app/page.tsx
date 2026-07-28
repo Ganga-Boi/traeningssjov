@@ -84,6 +84,10 @@ function status(person: Person) {
   return `${person.balance} klip`;
 }
 
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
 function nextTraining(classes: TrainingClass[]): NextTraining | null {
   const now = new Date();
   let best: NextTraining | null = null;
@@ -122,6 +126,7 @@ export default function Home() {
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [checkedSessionId, setCheckedSessionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [pageLoading, setPageLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [addingGuest, setAddingGuest] = useState(false);
@@ -171,57 +176,71 @@ export default function Home() {
   }, []);
 
   const loadPage = useCallback(async () => {
-    if (!selectedClass) return;
+    if (!selectedClass) return false;
     const requestId = ++loadRequest.current;
     setError("");
+    setPageLoading(true);
 
-    const [snapshotResult, sessionResult, balancesResult] = await Promise.all([
-      supabase.rpc("get_class_roster_snapshot", {
-        p_class_id: selectedClass.id,
-        p_snapshot_date: sessionDate,
-      }),
-      supabase
-        .from("sessions")
-        .select("id,status")
-        .eq("class_id", selectedClass.id)
-        .eq("session_date", sessionDate)
-        .maybeSingle(),
-      supabase
-        .from("people")
-        .select("id,balance"),
-    ]);
+    try {
+      const [snapshotResult, sessionResult, balancesResult] = await Promise.all([
+        supabase.rpc("get_class_roster_snapshot", {
+          p_class_id: selectedClass.id,
+          p_snapshot_date: sessionDate,
+        }),
+        supabase
+          .from("sessions")
+          .select("id,status")
+          .eq("class_id", selectedClass.id)
+          .eq("session_date", sessionDate)
+          .maybeSingle(),
+        supabase
+          .from("people")
+          .select("id,balance"),
+      ]);
 
-    if (snapshotResult.error) return setError(snapshotResult.error.message);
-    if (sessionResult.error) return setError(sessionResult.error.message);
-    if (balancesResult.error) return setError(balancesResult.error.message);
+      if (requestId !== loadRequest.current) return false;
+      if (snapshotResult.error) throw snapshotResult.error;
+      if (sessionResult.error) throw sessionResult.error;
+      if (balancesResult.error) throw balancesResult.error;
 
-    const loadedSession = (sessionResult.data ?? null) as TrainingSession | null;
-    const attendanceResult = loadedSession
-      ? await supabase
-          .from("attendance")
-          .select("person_id")
-          .eq("session_id", loadedSession.id)
-      : { data: [], error: null };
+      const loadedSession = (sessionResult.data ?? null) as TrainingSession | null;
+      const attendanceResult = loadedSession
+        ? await supabase
+            .from("attendance")
+            .select("person_id")
+            .eq("session_id", loadedSession.id)
+        : { data: [], error: null };
 
-    if (attendanceResult.error) return setError(attendanceResult.error.message);
-    if (requestId !== loadRequest.current) return;
+      if (requestId !== loadRequest.current) return false;
+      if (attendanceResult.error) throw attendanceResult.error;
 
-    const rows = (snapshotResult.data ?? []) as SnapshotRow[];
-    const currentBalances = new Map(
-      (balancesResult.data ?? []).map((person) => [person.id, person.balance as number | null]),
-    );
-    setPeople(rows.map((row) => ({
-      id: row.person_id,
-      name: row.name,
-      type: row.person_type,
-      balance: isPast
-        ? row.clip_count
-        : (currentBalances.get(row.person_id) ?? row.clip_count),
-      payment_status: row.payment_status,
-    })));
-    setChecked(new Set((attendanceResult.data ?? []).map((row) => row.person_id)));
-    setCheckedSessionId(loadedSession?.id ?? null);
-    setSession(loadedSession);
+      const rows = (snapshotResult.data ?? []) as SnapshotRow[];
+      const currentBalances = new Map(
+        (balancesResult.data ?? []).map((person) => [person.id, person.balance as number | null]),
+      );
+      setPeople(rows.map((row) => ({
+        id: row.person_id,
+        name: row.name,
+        type: row.person_type,
+        balance: isPast
+          ? row.clip_count
+          : (currentBalances.get(row.person_id) ?? row.clip_count),
+        payment_status: row.payment_status,
+      })));
+      setChecked(new Set((attendanceResult.data ?? []).map((row) => row.person_id)));
+      setCheckedSessionId(loadedSession?.id ?? null);
+      setSession(loadedSession);
+      return true;
+    } catch (loadError) {
+      if (requestId === loadRequest.current) {
+        setError(errorMessage(loadError));
+      }
+      return false;
+    } finally {
+      if (requestId === loadRequest.current) {
+        setPageLoading(false);
+      }
+    }
   }, [isPast, selectedClass, sessionDate]);
 
   useEffect(() => {
@@ -289,34 +308,34 @@ export default function Home() {
     setBusyId(person.id);
     setError("");
 
-    const activeSession = await ensureSession();
-    if (!activeSession) {
-      attendanceToggleInFlight.current = false;
-      setBusyId(null);
-      return;
-    }
+    try {
+      const activeSession = await ensureSession();
+      if (!activeSession) return;
 
-    const result = await supabase.rpc("toggle_attendance", {
-      p_person_id: person.id,
-      p_session_id: activeSession.id,
-    });
+      const result = await supabase.rpc("toggle_attendance", {
+        p_person_id: person.id,
+        p_session_id: activeSession.id,
+      });
 
-    if (result.error) {
-      attendanceToggleInFlight.current = false;
-      setBusyId(null);
-      if (result.error.message.includes("PAYMENT_REQUIRED")) {
-        setPaymentPerson(person);
+      if (result.error) {
+        if (result.error.message.includes("PAYMENT_REQUIRED")) {
+          setPaymentPerson(person);
+          return;
+        }
+        setError(result.error.message);
         return;
       }
-      return setError(result.error.message);
-    }
 
-    await loadPage();
-    attendanceToggleInFlight.current = false;
-    setBusyId(null);
+      await loadPage();
 
-    if (result.data?.attended && person.type === "medlem" && person.balance === 1) {
-      setPaymentPerson({ ...person, balance: 0, payment_status: "skal_betale" });
+      if (result.data?.attended && person.type === "medlem" && person.balance === 1) {
+        setPaymentPerson({ ...person, balance: 0, payment_status: "skal_betale" });
+      }
+    } catch (toggleError) {
+      setError(errorMessage(toggleError));
+    } finally {
+      attendanceToggleInFlight.current = false;
+      setBusyId(null);
     }
   }
 
@@ -390,32 +409,38 @@ export default function Home() {
     await Promise.all([loadPage(), loadGuestConversions()]);
   }
 
-  async function resetAllTestData() {
+  async function handleReset() {
     setBusyId("reset");
     setError("");
 
-    const result = await supabase.rpc("reset_all_test_data", {
-      p_confirmation: "NULSTIL ALLE TESTDATA",
-    });
+    try {
+      const result = await supabase.rpc("reset_all_test_data", {
+        p_confirmation: "NULSTIL ALLE TESTDATA",
+      });
 
-    setBusyId(null);
-    if (result.error) {
-      setError(result.error.message);
-      return;
+      if (result.error) throw result.error;
+
+      loadRequest.current += 1;
+      setResetWarningOpen(false);
+      setSession(null);
+      setChecked(new Set());
+      setCheckedSessionId(null);
+      setPeople([]);
+      setInactiveMembers([]);
+      setGuestConversions([]);
+      setPaymentPerson(null);
+      setDeactivatePerson(null);
+      setConversionToUndo(null);
+      setPageLoading(true);
+
+      await Promise.all([loadPage(), loadInactiveMembers(), loadGuestConversions()]);
+    } catch (resetError) {
+      const message = errorMessage(resetError);
+      setError(message);
+      window.alert(`Nulstilling mislykkedes: ${message}`);
+    } finally {
+      setBusyId(null);
     }
-
-    loadRequest.current += 1;
-    setResetWarningOpen(false);
-    setSession(null);
-    setChecked(new Set());
-    setCheckedSessionId(null);
-    setPeople([]);
-    setInactiveMembers([]);
-    setGuestConversions([]);
-    setPaymentPerson(null);
-    setDeactivatePerson(null);
-    setConversionToUndo(null);
-    await Promise.all([loadPage(), loadInactiveMembers(), loadGuestConversions()]);
   }
 
   async function confirmDeactivateMember(person: Person) {
@@ -528,8 +553,10 @@ export default function Home() {
     setClassIndex(nextIndex);
     setSessionDate(moveDate(sessionDate, delta));
     setSession(null);
+    setPeople([]);
     setChecked(new Set());
     setCheckedSessionId(null);
+    setPageLoading(true);
     setError("");
   }
 
@@ -580,12 +607,12 @@ export default function Home() {
     <main className="min-h-screen bg-[#f4f5f1] px-3 py-5 text-[#18322b] sm:px-5 sm:py-8">
       <div className="mx-auto max-w-xl">
         <nav className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 rounded-2xl border border-[#d9e0da] bg-white p-4 shadow-sm">
-          <button onClick={() => changeTraining(-1)} className="min-h-12 justify-self-start text-sm font-bold text-[#28755d]">← Forrige</button>
+          <button disabled={pageLoading || Boolean(busyId)} onClick={() => changeTraining(-1)} className="min-h-12 justify-self-start text-sm font-bold text-[#28755d] disabled:opacity-50">← Forrige</button>
           <div className="text-center">
             <h1 className="whitespace-nowrap text-xl font-black">{weekday(sessionDate)} {time(selectedClass.start_time)}–{time(selectedClass.end_time)}</h1>
             <p className="mt-1 text-sm font-semibold text-[#60756d]">{displayDate(sessionDate)}</p>
           </div>
-          <button onClick={() => changeTraining(1)} className="min-h-12 justify-self-end text-sm font-bold text-[#28755d]">Næste →</button>
+          <button disabled={pageLoading || Boolean(busyId)} onClick={() => changeTraining(1)} className="min-h-12 justify-self-end text-sm font-bold text-[#28755d] disabled:opacity-50">Næste →</button>
         </nav>
 
         {isPast && (
@@ -619,7 +646,7 @@ export default function Home() {
           </div>
         )}
 
-        {isEditable && session?.status !== "aflyst" && (
+        {isEditable && !pageLoading && session?.status !== "aflyst" && (
           <button
             onClick={() => setAddingGuest(true)}
             className="mt-5 inline-flex min-h-12 items-center rounded-xl border border-[#b8cec4] bg-white px-4 text-base font-black text-[#28755d] shadow-sm transition hover:bg-[#eef6f2] active:scale-[0.98]"
@@ -629,7 +656,7 @@ export default function Home() {
           </button>
         )}
 
-        {isEditable && (!session || session.status === "planlagt") && (
+        {isEditable && !pageLoading && (!session || session.status === "planlagt") && (
           <button
             type="button"
             onClick={() => setCancellationAction("cancel")}
@@ -639,7 +666,13 @@ export default function Home() {
           </button>
         )}
 
-        {session?.status !== "aflyst" && (
+        {pageLoading && (
+          <div className="mt-5 rounded-2xl border border-[#d9e0da] bg-white p-6 text-center text-sm font-semibold text-[#60756d] shadow-sm">
+            Indlæser træning…
+          </div>
+        )}
+
+        {!pageLoading && session?.status !== "aflyst" && (
         <section className="mt-2 overflow-hidden rounded-2xl border border-[#d9e0da] bg-white shadow-sm">
           {sortedPeople.map((person) => {
             const isChecked = Boolean(
@@ -677,7 +710,7 @@ export default function Home() {
         </section>
         )}
 
-        {isEditable && (
+        {isEditable && !pageLoading && (
           <section className="mt-5">
             <button
               type="button"
@@ -836,7 +869,7 @@ export default function Home() {
           confirmLabel="Nulstil alt"
           busy={busyId === "reset"}
           onClose={() => setResetWarningOpen(false)}
-          onConfirm={() => void resetAllTestData()}
+          onConfirm={() => void handleReset()}
         />
       )}
     </main>
