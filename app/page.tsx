@@ -147,7 +147,7 @@ export default function Home() {
     if (!selectedClass) return;
     setError("");
 
-    const [snapshotResult, sessionResult] = await Promise.all([
+    const [snapshotResult, sessionResult, balancesResult] = await Promise.all([
       supabase.rpc("get_class_roster_snapshot", {
         p_class_id: selectedClass.id,
         p_snapshot_date: sessionDate,
@@ -158,22 +158,31 @@ export default function Home() {
         .eq("class_id", selectedClass.id)
         .eq("session_date", sessionDate)
         .maybeSingle(),
+      supabase
+        .from("people")
+        .select("id,balance"),
     ]);
 
     if (snapshotResult.error) return setError(snapshotResult.error.message);
     if (sessionResult.error) return setError(sessionResult.error.message);
+    if (balancesResult.error) return setError(balancesResult.error.message);
 
     const rows = (snapshotResult.data ?? []) as SnapshotRow[];
+    const currentBalances = new Map(
+      (balancesResult.data ?? []).map((person) => [person.id, person.balance as number | null]),
+    );
     setPeople(rows.map((row) => ({
       id: row.person_id,
       name: row.name,
       type: row.person_type,
-      balance: row.clip_count,
+      balance: isPast
+        ? row.clip_count
+        : (currentBalances.get(row.person_id) ?? row.clip_count),
       payment_status: row.payment_status,
     })));
     setChecked(new Set(rows.filter((row) => row.attended).map((row) => row.person_id)));
     setSession((sessionResult.data ?? null) as TrainingSession | null);
-  }, [selectedClass, sessionDate]);
+  }, [isPast, selectedClass, sessionDate]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void loadClasses(), 0);
