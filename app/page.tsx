@@ -318,6 +318,9 @@ export default function Home() {
   function changeTraining(direction: -1 | 1) {
     if (!selectedClass || classes.length === 0) return;
 
+    // Ugyldiggør straks en igangværende indlæsning fra det gamle hold.
+    loadRequest.current += 1;
+
     const nextIndex = (classIndex + direction + classes.length) % classes.length;
     const nextClass = classes[nextIndex];
 
