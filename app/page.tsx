@@ -110,7 +110,9 @@ export default function Home() {
   const [paymentPerson, setPaymentPerson] = useState<Person | null>(null);
 
   const selectedClass = classes[classIndex] ?? null;
-  const isToday = sessionDate === localDate(new Date());
+  const todayDate = localDate(new Date());
+  const isPast = sessionDate < todayDate;
+  const isEditable = !isPast;
 
   const loadClasses = useCallback(async () => {
     const result = await supabase
@@ -198,7 +200,7 @@ export default function Home() {
   }
 
   async function toggle(person: Person) {
-    if (busyId || !isToday) return;
+    if (busyId || !isEditable) return;
 
     if (person.type === "medlem" && (person.balance ?? 0) <= 0) {
       setPaymentPerson(person);
@@ -336,10 +338,10 @@ export default function Home() {
           <button onClick={() => changeTraining(1)} className="min-h-12 justify-self-end text-sm font-bold text-[#28755d]">Næste →</button>
         </nav>
 
-        {!isToday && <p className="mt-3 text-center text-sm font-semibold text-[#60756d]">Historik · kun visning</p>}
+        {isPast && <p className="mt-3 text-center text-sm font-semibold text-[#60756d]">Historik · kun visning</p>}
         {error && <div className="mt-4 rounded-xl bg-[#fee9e5] p-4 text-sm font-semibold text-[#8d342d]">{error}</div>}
 
-        {isToday && <button onClick={() => setAddingGuest(true)} className="mt-5 min-h-12 px-2 text-base font-black text-[#28755d]">+ Gæst</button>}
+        {isEditable && <button onClick={() => setAddingGuest(true)} className="mt-5 min-h-12 px-2 text-base font-black text-[#28755d]">+ Gæst</button>}
 
         <section className="mt-2 overflow-hidden rounded-2xl border border-[#d9e0da] bg-white shadow-sm">
           {sortedPeople.map((person) => {
@@ -350,7 +352,7 @@ export default function Home() {
               <button
                 key={person.id}
                 onClick={() => void toggle(person)}
-                disabled={Boolean(busyId) || !isToday}
+                disabled={Boolean(busyId) || !isEditable}
                 className={`grid min-h-16 w-full grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-3 border-b border-[#e8ece8] px-4 py-3 text-left ${blocked ? "bg-[#fff1ef]" : isChecked ? "bg-[#eef1ee]" : "bg-white"}`}
               >
                 <span className={`flex h-7 w-7 items-center justify-center rounded-md border-2 text-base font-black ${isChecked ? "border-[#28755d] bg-[#28755d] text-white" : blocked ? "border-[#d0a155] bg-[#fff4df] text-[#8b5605]" : "border-[#aebdb5] text-transparent"}`}>{blocked ? "!" : "✓"}</span>
