@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 const supabase = getSupabaseBrowserClient();
@@ -111,6 +111,7 @@ export default function Home() {
   const [error, setError] = useState("");
   const [addingGuest, setAddingGuest] = useState(false);
   const [paymentPerson, setPaymentPerson] = useState<Person | null>(null);
+  const loadRequest = useRef(0);
 
   const selectedClass = classes[classIndex] ?? null;
   const todayDate = localDate(new Date());
@@ -145,6 +146,7 @@ export default function Home() {
 
   const loadPage = useCallback(async () => {
     if (!selectedClass) return;
+    const requestId = ++loadRequest.current;
     setError("");
 
     const [snapshotResult, sessionResult, balancesResult] = await Promise.all([
@@ -167,6 +169,17 @@ export default function Home() {
     if (sessionResult.error) return setError(sessionResult.error.message);
     if (balancesResult.error) return setError(balancesResult.error.message);
 
+    const loadedSession = (sessionResult.data ?? null) as TrainingSession | null;
+    const attendanceResult = loadedSession
+      ? await supabase
+          .from("attendance")
+          .select("person_id")
+          .eq("session_id", loadedSession.id)
+      : { data: [], error: null };
+
+    if (attendanceResult.error) return setError(attendanceResult.error.message);
+    if (requestId !== loadRequest.current) return;
+
     const rows = (snapshotResult.data ?? []) as SnapshotRow[];
     const currentBalances = new Map(
       (balancesResult.data ?? []).map((person) => [person.id, person.balance as number | null]),
@@ -180,8 +193,8 @@ export default function Home() {
         : (currentBalances.get(row.person_id) ?? row.clip_count),
       payment_status: row.payment_status,
     })));
-    setChecked(new Set(rows.filter((row) => row.attended).map((row) => row.person_id)));
-    setSession((sessionResult.data ?? null) as TrainingSession | null);
+    setChecked(new Set((attendanceResult.data ?? []).map((row) => row.person_id)));
+    setSession(loadedSession);
   }, [isPast, selectedClass, sessionDate]);
 
   useEffect(() => {
