@@ -32,6 +32,12 @@ type SnapshotRow = {
   attended: boolean;
 };
 
+type NextTraining = {
+  index: number;
+  date: string;
+  distance: number;
+};
+
 function localDate(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
@@ -64,23 +70,28 @@ function status(person: Person) {
   return `${person.balance} klip`;
 }
 
-function nextTraining(classes: TrainingClass[]) {
+function nextTraining(classes: TrainingClass[]): NextTraining | null {
   const today = new Date();
   const jsDay = today.getDay();
   const currentWeekday = jsDay === 0 ? 7 : jsDay;
 
-  let best: { index: number; date: string; distance: number } | null = null;
+  let best: NextTraining | null = null;
 
-  classes.forEach((trainingClass, index) => {
+  for (let index = 0; index < classes.length; index += 1) {
+    const trainingClass = classes[index];
     const distance = (trainingClass.weekday - currentWeekday + 7) % 7;
     const date = new Date(today);
     date.setHours(12, 0, 0, 0);
     date.setDate(today.getDate() + distance);
 
-    if (!best || distance < best.distance || (distance === best.distance && trainingClass.start_time < classes[best.index].start_time)) {
+    if (
+      best === null ||
+      distance < best.distance ||
+      (distance === best.distance && trainingClass.start_time < classes[best.index].start_time)
+    ) {
       best = { index, date: localDate(date), distance };
     }
-  });
+  }
 
   return best;
 }
@@ -119,7 +130,7 @@ export default function Home() {
     setClasses(loaded);
 
     const start = nextTraining(loaded);
-    if (start) {
+    if (start !== null) {
       setClassIndex(start.index);
       setSessionDate(start.date);
     }
