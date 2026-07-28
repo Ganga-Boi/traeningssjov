@@ -30,6 +30,13 @@ type InactiveMember = {
   balance: number;
 };
 
+type GuestConversion = {
+  payment_id: string;
+  person_id: string;
+  name: string;
+  paid_at: string;
+};
+
 type SnapshotRow = {
   person_id: string;
   name: string;
@@ -121,7 +128,10 @@ export default function Home() {
   const [paymentPerson, setPaymentPerson] = useState<Person | null>(null);
   const [showMemberAdmin, setShowMemberAdmin] = useState(false);
   const [inactiveMembers, setInactiveMembers] = useState<InactiveMember[]>([]);
+  const [guestConversions, setGuestConversions] = useState<GuestConversion[]>([]);
   const [deactivatePerson, setDeactivatePerson] = useState<Person | null>(null);
+  const [conversionToUndo, setConversionToUndo] = useState<GuestConversion | null>(null);
+  const [resetWarningOpen, setResetWarningOpen] = useState(false);
   const [cancellationAction, setCancellationAction] = useState<"cancel" | "restore" | null>(null);
   const [correctionWarningOpen, setCorrectionWarningOpen] = useState(false);
   const [correctionMode, setCorrectionMode] = useState(false);
@@ -315,12 +325,16 @@ export default function Home() {
     setBusyId(person.id);
     setError("");
 
-    const result = await supabase.rpc("register_payment", {
-      p_person_id: person.id,
-      p_amount_ore: 37500,
-      p_clips: 10,
-      p_note: "Betaling registreret af Randi",
-    });
+    const result = person.type === "gæst"
+      ? await supabase.rpc("convert_guest_to_member", {
+          p_person_id: person.id,
+        })
+      : await supabase.rpc("register_payment", {
+          p_person_id: person.id,
+          p_amount_ore: 37500,
+          p_clips: 10,
+          p_note: "Betaling registreret af Randi",
+        });
 
     setBusyId(null);
     if (result.error) {
@@ -329,7 +343,7 @@ export default function Home() {
     }
 
     setPaymentPerson(null);
-    await loadPage();
+    await Promise.all([loadPage(), loadGuestConversions()]);
     return true;
   }
 
@@ -346,6 +360,63 @@ export default function Home() {
     }
 
     setInactiveMembers((result.data ?? []) as InactiveMember[]);
+  }
+
+  async function loadGuestConversions() {
+    const result = await supabase.rpc("get_reversible_guest_conversions");
+
+    if (result.error) {
+      setError(result.error.message);
+      return;
+    }
+
+    setGuestConversions((result.data ?? []) as GuestConversion[]);
+  }
+
+  async function undoGuestConversion(conversion: GuestConversion) {
+    setBusyId(conversion.payment_id);
+    setError("");
+
+    const result = await supabase.rpc("undo_guest_conversion", {
+      p_payment_id: conversion.payment_id,
+    });
+
+    setBusyId(null);
+    if (result.error) {
+      setError(result.error.message);
+      return;
+    }
+
+    setConversionToUndo(null);
+    await Promise.all([loadPage(), loadGuestConversions()]);
+  }
+
+  async function resetAllTestData() {
+    setBusyId("reset");
+    setError("");
+
+    const result = await supabase.rpc("reset_all_test_data", {
+      p_confirmation: "NULSTIL ALLE TESTDATA",
+    });
+
+    setBusyId(null);
+    if (result.error) {
+      setError(result.error.message);
+      return;
+    }
+
+    loadRequest.current += 1;
+    setResetWarningOpen(false);
+    setSession(null);
+    setChecked(new Set());
+    setCheckedSessionId(null);
+    setPeople([]);
+    setInactiveMembers([]);
+    setGuestConversions([]);
+    setPaymentPerson(null);
+    setDeactivatePerson(null);
+    setConversionToUndo(null);
+    await Promise.all([loadPage(), loadInactiveMembers(), loadGuestConversions()]);
   }
 
   async function confirmDeactivateMember(person: Person) {
@@ -441,6 +512,7 @@ export default function Home() {
     setCancellationAction(null);
     setShowMemberAdmin(false);
     setInactiveMembers([]);
+    setGuestConversions([]);
 
     const nextIndex = (classIndex + direction + classes.length) % classes.length;
     const nextClass = classes[nextIndex];
@@ -613,7 +685,7 @@ export default function Home() {
               onClick={() => {
                 const next = !showMemberAdmin;
                 setShowMemberAdmin(next);
-                if (next) void loadInactiveMembers();
+                if (next) void Promise.all([loadInactiveMembers(), loadGuestConversions()]);
               }}
               className="min-h-11 text-sm font-bold text-[#60756d]"
             >
@@ -653,6 +725,32 @@ export default function Home() {
                 {inactiveMembers.length === 0 && (
                   <p className="mt-2 text-sm text-[#60756d]">Ingen inaktive medlemmer.</p>
                 )}
+
+                <h2 className="mt-6 font-black">Gæstekonverteringer</h2>
+                {guestConversions.map((conversion) => (
+                  <div key={conversion.payment_id} className="mt-3 flex items-center justify-between gap-3">
+                    <span className="font-bold">{conversion.name}</span>
+                    <button
+                      type="button"
+                      disabled={busyId === conversion.payment_id}
+                      onClick={() => setConversionToUndo(conversion)}
+                      className="min-h-10 rounded-lg border border-[#d6a7a2] px-3 text-sm font-bold text-[#9b3028]"
+                    >
+                      Fortryd konvertering
+                    </button>
+                  </div>
+                ))}
+                {guestConversions.length === 0 && (
+                  <p className="mt-2 text-sm text-[#60756d]">Ingen konverteringer kan fortrydes.</p>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => setResetWarningOpen(true)}
+                  className="mt-8 min-h-11 w-full rounded-lg border border-[#d6a7a2] px-3 text-sm font-black text-[#9b3028]"
+                >
+                  Nulstil alle testdata
+                </button>
               </div>
             )}
           </section>
@@ -720,6 +818,26 @@ export default function Home() {
           tone={checkedSessionId === session?.id && checked.has(correctionPerson.id) ? "danger" : "primary"}
           onClose={() => setCorrectionPerson(null)}
           onConfirm={() => void correctHistoricalAttendance(correctionPerson)}
+        />
+      )}
+      {conversionToUndo && (
+        <ConfirmDialog
+          title="Fortryd gæstekonvertering"
+          message={`Vil du tilbageføre betalingen for ${conversionToUndo.name} og ændre personen tilbage til gæst?`}
+          confirmLabel="Fortryd konvertering"
+          busy={busyId === conversionToUndo.payment_id}
+          onClose={() => setConversionToUndo(null)}
+          onConfirm={() => void undoGuestConversion(conversionToUndo)}
+        />
+      )}
+      {resetWarningOpen && (
+        <ConfirmDialog
+          title="Nulstil testdata"
+          message="Er du sikker på, at du vil nulstille alle testdata?"
+          confirmLabel="Nulstil alt"
+          busy={busyId === "reset"}
+          onClose={() => setResetWarningOpen(false)}
+          onConfirm={() => void resetAllTestData()}
         />
       )}
     </main>
@@ -799,8 +917,14 @@ function PaymentDialog({ person, busy, onClose, onConfirm }: { person: Person; b
         <p className="mt-3 text-base font-bold text-[#b42318]">
           {person.type === "gæst" ? "Konvertér gæst til medlem" : "0 klip · betaling mangler"}
         </p>
-        <p className="mt-2 text-sm text-[#60756d]">Har personen betalt 375 kr. for 10 klip?</p>
-        <button type="button" disabled={busy} onClick={() => void onConfirm(person)} className="mt-4 min-h-14 w-full rounded-xl bg-[#28755d] px-4 font-black text-white disabled:opacity-50">{busy ? "Gemmer…" : "Registrér betaling"}</button>
+        <p className="mt-2 text-sm text-[#60756d]">
+          {person.type === "gæst"
+            ? `Vil du konvertere ${person.name} til medlem og registrere betaling på 375 kr. (10 klip)?`
+            : "Har personen betalt 375 kr. for 10 klip?"}
+        </p>
+        <button type="button" disabled={busy} onClick={() => void onConfirm(person)} className="mt-4 min-h-14 w-full rounded-xl bg-[#28755d] px-4 font-black text-white disabled:opacity-50">
+          {busy ? "Gemmer…" : person.type === "gæst" ? "Konvertér og registrér betaling" : "Registrér betaling"}
+        </button>
         <button type="button" disabled={busy} onClick={onClose} className="mt-2 min-h-12 w-full font-bold text-[#60756d]">Luk</button>
       </div>
     </div>
