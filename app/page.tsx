@@ -36,14 +36,6 @@ function localDate(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
-function mondayDate() {
-  const today = new Date();
-  const day = today.getDay() === 0 ? 7 : today.getDay();
-  const result = new Date(today);
-  result.setDate(today.getDate() + 1 - day);
-  return localDate(result);
-}
-
 function moveDate(value: string, days: number) {
   const date = new Date(`${value}T12:00:00`);
   date.setDate(date.getDate() + days);
@@ -72,10 +64,31 @@ function status(person: Person) {
   return `${person.balance} klip`;
 }
 
+function nextTraining(classes: TrainingClass[]) {
+  const today = new Date();
+  const jsDay = today.getDay();
+  const currentWeekday = jsDay === 0 ? 7 : jsDay;
+
+  let best: { index: number; date: string; distance: number } | null = null;
+
+  classes.forEach((trainingClass, index) => {
+    const distance = (trainingClass.weekday - currentWeekday + 7) % 7;
+    const date = new Date(today);
+    date.setHours(12, 0, 0, 0);
+    date.setDate(today.getDate() + distance);
+
+    if (!best || distance < best.distance || (distance === best.distance && trainingClass.start_time < classes[best.index].start_time)) {
+      best = { index, date: localDate(date), distance };
+    }
+  });
+
+  return best;
+}
+
 export default function Home() {
   const [classes, setClasses] = useState<TrainingClass[]>([]);
   const [classIndex, setClassIndex] = useState(0);
-  const [sessionDate, setSessionDate] = useState(mondayDate());
+  const [sessionDate, setSessionDate] = useState(localDate(new Date()));
   const [session, setSession] = useState<TrainingSession | null>(null);
   const [people, setPeople] = useState<Person[]>([]);
   const [checked, setChecked] = useState<Set<string>>(new Set());
@@ -96,8 +109,21 @@ export default function Home() {
       .order("weekday")
       .order("start_time");
 
-    if (result.error) setError(result.error.message);
-    else setClasses((result.data ?? []) as TrainingClass[]);
+    if (result.error) {
+      setError(result.error.message);
+      setLoading(false);
+      return;
+    }
+
+    const loaded = (result.data ?? []) as TrainingClass[];
+    setClasses(loaded);
+
+    const start = nextTraining(loaded);
+    if (start) {
+      setClassIndex(start.index);
+      setSessionDate(start.date);
+    }
+
     setLoading(false);
   }, []);
 
