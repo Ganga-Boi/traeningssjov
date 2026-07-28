@@ -208,6 +208,22 @@ export default function Home() {
     return () => window.clearTimeout(timer);
   }, [loadPage]);
 
+  useEffect(() => {
+    function refreshWhenVisible() {
+      if (document.visibilityState === "visible") {
+        void loadPage();
+      }
+    }
+
+    window.addEventListener("focus", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+
+    return () => {
+      window.removeEventListener("focus", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, [loadPage]);
+
   const sortedPeople = useMemo(() => [...people].sort((a, b) => {
     if (a.type !== b.type) return a.type === "gæst" ? -1 : 1;
     return a.name.localeCompare(b.name, "da");
