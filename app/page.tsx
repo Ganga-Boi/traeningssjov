@@ -24,6 +24,12 @@ type TrainingClass = {
 
 type TrainingSession = { id: string; status: string };
 
+type InactiveMember = {
+  person_id: string;
+  name: string;
+  balance: number;
+};
+
 type SnapshotRow = {
   person_id: string;
   name: string;
@@ -111,6 +117,9 @@ export default function Home() {
   const [error, setError] = useState("");
   const [addingGuest, setAddingGuest] = useState(false);
   const [paymentPerson, setPaymentPerson] = useState<Person | null>(null);
+  const [showMemberAdmin, setShowMemberAdmin] = useState(false);
+  const [inactiveMembers, setInactiveMembers] = useState<InactiveMember[]>([]);
+  const [deactivatePerson, setDeactivatePerson] = useState<Person | null>(null);
   const loadRequest = useRef(0);
 
   const selectedClass = classes[classIndex] ?? null;
@@ -317,6 +326,56 @@ export default function Home() {
     return true;
   }
 
+  async function loadInactiveMembers() {
+    if (!selectedClass) return;
+
+    const result = await supabase.rpc("get_inactive_members", {
+      p_class_id: selectedClass.id,
+    });
+
+    if (result.error) {
+      setError(result.error.message);
+      return;
+    }
+
+    setInactiveMembers((result.data ?? []) as InactiveMember[]);
+  }
+
+  async function confirmDeactivateMember(person: Person) {
+    setBusyId(person.id);
+    setError("");
+
+    const result = await supabase.rpc("deactivate_member", {
+      p_person_id: person.id,
+    });
+
+    setBusyId(null);
+    if (result.error) {
+      setError(result.error.message);
+      return;
+    }
+
+    setDeactivatePerson(null);
+    await Promise.all([loadPage(), loadInactiveMembers()]);
+  }
+
+  async function reactivateMember(personId: string) {
+    setBusyId(personId);
+    setError("");
+
+    const result = await supabase.rpc("reactivate_member", {
+      p_person_id: personId,
+    });
+
+    setBusyId(null);
+    if (result.error) {
+      setError(result.error.message);
+      return;
+    }
+
+    await Promise.all([loadPage(), loadInactiveMembers()]);
+  }
+
   function changeTraining(direction: -1 | 1) {
     if (!selectedClass || classes.length === 0) return;
 
@@ -433,6 +492,58 @@ export default function Home() {
           })}
           {sortedPeople.length === 0 && <p className="p-6 text-center text-sm font-semibold text-[#60756d]">Ingen deltagere på dette hold endnu.</p>}
         </section>
+
+        {isEditable && (
+          <section className="mt-5">
+            <button
+              type="button"
+              onClick={() => {
+                const next = !showMemberAdmin;
+                setShowMemberAdmin(next);
+                if (next) void loadInactiveMembers();
+              }}
+              className="min-h-11 text-sm font-bold text-[#60756d]"
+            >
+              {showMemberAdmin ? "Skjul medlemsadministration" : "Administrér medlemmer"}
+            </button>
+
+            {showMemberAdmin && (
+              <div className="rounded-2xl border border-[#d9e0da] bg-white p-4 shadow-sm">
+                <h2 className="font-black">Aktive medlemmer</h2>
+                {sortedPeople.filter((person) => person.type === "medlem").map((person) => (
+                  <div key={person.id} className="mt-3 flex items-center justify-between gap-3">
+                    <span className="font-bold">{person.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => setDeactivatePerson(person)}
+                      className="min-h-10 rounded-lg border border-[#d6a7a2] px-3 text-sm font-bold text-[#9b3028]"
+                    >
+                      Fjern
+                    </button>
+                  </div>
+                ))}
+
+                <h2 className="mt-6 font-black">Inaktive medlemmer</h2>
+                {inactiveMembers.map((person) => (
+                  <div key={person.person_id} className="mt-3 flex items-center justify-between gap-3">
+                    <span className="font-bold">{person.name}</span>
+                    <button
+                      type="button"
+                      disabled={busyId === person.person_id}
+                      onClick={() => void reactivateMember(person.person_id)}
+                      className="min-h-10 rounded-lg border border-[#b8cec4] px-3 text-sm font-bold text-[#28755d]"
+                    >
+                      Genaktivér
+                    </button>
+                  </div>
+                ))}
+                {inactiveMembers.length === 0 && (
+                  <p className="mt-2 text-sm text-[#60756d]">Ingen inaktive medlemmer.</p>
+                )}
+              </div>
+            )}
+          </section>
+        )}
       </div>
 
       {addingGuest && <GuestDialog onClose={() => setAddingGuest(false)} onSave={addGuest} />}
@@ -444,7 +555,53 @@ export default function Home() {
           onConfirm={registerPayment}
         />
       )}
+      {deactivatePerson && (
+        <ConfirmDialog
+          title="Fjern medlem"
+          message={`Er du sikker på, at du vil fjerne ${deactivatePerson.name} fra den aktive liste? Historikken bevares.`}
+          confirmLabel="Fjern fra aktiv liste"
+          busy={busyId === deactivatePerson.id}
+          onClose={() => setDeactivatePerson(null)}
+          onConfirm={() => void confirmDeactivateMember(deactivatePerson)}
+        />
+      )}
     </main>
+  );
+}
+
+function ConfirmDialog({
+  title,
+  message,
+  confirmLabel,
+  busy,
+  onClose,
+  onConfirm,
+}: {
+  title: string;
+  message: string;
+  confirmLabel: string;
+  busy: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-40 flex items-end bg-black/35 p-3 sm:items-center sm:justify-center">
+      <div className="w-full rounded-2xl bg-white p-5 text-[#18322b] shadow-xl sm:max-w-sm">
+        <h2 className="text-xl font-black">{title}</h2>
+        <p className="mt-3 text-sm leading-6 text-[#60756d]">{message}</p>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={onConfirm}
+          className="mt-4 min-h-14 w-full rounded-xl bg-[#9b3028] px-4 font-black text-white disabled:opacity-50"
+        >
+          {busy ? "Gemmer…" : confirmLabel}
+        </button>
+        <button type="button" disabled={busy} onClick={onClose} className="mt-2 min-h-12 w-full font-bold text-[#60756d]">
+          Annuller
+        </button>
+      </div>
+    </div>
   );
 }
 
