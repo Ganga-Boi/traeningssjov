@@ -429,31 +429,24 @@ export default function Home() {
     const clean = name.trim();
     if (!clean) return "Navn mangler";
 
-    const existing = await supabase
-      .from("people")
-      .select("id")
-      .ilike("name", clean)
-      .maybeSingle();
+    const activeSession = await ensureSession();
+    if (!activeSession) return "Træningen kunne ikke oprettes";
 
-    if (existing.error) return existing.error.message;
+    const personResult = await supabase.rpc("create_guest_for_session", {
+      p_name: clean,
+      p_session_id: activeSession.id,
+    });
 
-    let personId = existing.data?.id as string | undefined;
-    if (!personId) {
-      const activeSession = await ensureSession();
-      if (!activeSession) return "Træningen kunne ikke oprettes";
-
-      const personResult = await supabase.rpc("create_guest_for_session", {
-        p_name: clean,
-        p_session_id: activeSession.id,
-      });
-
-      if (personResult.error) return personResult.error.message;
-      personId = personResult.data.id;
+    if (personResult.error) {
+      if (personResult.error.message.includes("PERSON_ALREADY_EXISTS")) {
+        return `${clean} findes allerede på listen. Brug den eksisterende person i stedet for at oprette en ny.`;
+      }
+      return personResult.error.message;
     }
 
     const membershipResult = await supabase.from("class_memberships").upsert({
       class_id: selectedClass.id,
-      person_id: personId,
+      person_id: personResult.data.id,
       active: true,
     });
 
