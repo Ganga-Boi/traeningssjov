@@ -46,6 +46,11 @@ type SnapshotRow = {
   attended: boolean;
 };
 
+type AttendanceRow = {
+  person_id: string;
+  session_id: string;
+};
+
 type NextTraining = {
   index: number;
   date: string;
@@ -123,8 +128,7 @@ export default function Home() {
   const [sessionDate, setSessionDate] = useState(localDate(new Date()));
   const [session, setSession] = useState<TrainingSession | null>(null);
   const [people, setPeople] = useState<Person[]>([]);
-  const [checked, setChecked] = useState<Set<string>>(new Set());
-  const [checkedSessionId, setCheckedSessionId] = useState<string | null>(null);
+  const [attendance, setAttendance] = useState<AttendanceRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [pageLoading, setPageLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -207,7 +211,7 @@ export default function Home() {
       const attendanceResult = loadedSession
         ? await supabase
             .from("attendance")
-            .select("person_id")
+            .select("person_id,session_id")
             .eq("session_id", loadedSession.id)
         : { data: [], error: null };
 
@@ -227,8 +231,13 @@ export default function Home() {
           : (currentBalances.get(row.person_id) ?? row.clip_count),
         payment_status: row.payment_status,
       })));
-      setChecked(new Set((attendanceResult.data ?? []).map((row) => row.person_id)));
-      setCheckedSessionId(loadedSession?.id ?? null);
+      setAttendance(
+        loadedSession
+          ? ((attendanceResult.data ?? []) as AttendanceRow[]).filter(
+              (row) => row.session_id === loadedSession.id,
+            )
+          : [],
+      );
       setSession(loadedSession);
       return true;
     } catch (loadError) {
@@ -276,6 +285,13 @@ export default function Home() {
     }
     return a.name.localeCompare(b.name, "da");
   }), [people]);
+
+  function isAttending(personId: string) {
+    if (!session) return false;
+    return attendance.some(
+      (row) => row.session_id === session.id && row.person_id === personId,
+    );
+  }
 
   async function ensureSession() {
     if (session) return session;
@@ -423,8 +439,7 @@ export default function Home() {
       loadRequest.current += 1;
       setResetWarningOpen(false);
       setSession(null);
-      setChecked(new Set());
-      setCheckedSessionId(null);
+      setAttendance([]);
       setPeople([]);
       setInactiveMembers([]);
       setGuestConversions([]);
@@ -496,6 +511,7 @@ export default function Home() {
     }
 
     setCancellationAction(null);
+    setAttendance([]);
     setSession(result.data as TrainingSession);
     await loadPage();
   }
@@ -512,7 +528,7 @@ export default function Home() {
     const result = await supabase.rpc("correct_historical_attendance", {
       p_person_id: person.id,
       p_session_id: session.id,
-      p_should_attend: !(checkedSessionId === session.id && checked.has(person.id)),
+      p_should_attend: !isAttending(person.id),
     });
 
     setBusyId(null);
@@ -554,8 +570,7 @@ export default function Home() {
     setSessionDate(moveDate(sessionDate, delta));
     setSession(null);
     setPeople([]);
-    setChecked(new Set());
-    setCheckedSessionId(null);
+    setAttendance([]);
     setPageLoading(true);
     setError("");
   }
@@ -675,11 +690,7 @@ export default function Home() {
         {!pageLoading && session?.status !== "aflyst" && (
         <section className="mt-2 overflow-hidden rounded-2xl border border-[#d9e0da] bg-white shadow-sm">
           {sortedPeople.map((person) => {
-            const isChecked = Boolean(
-              session &&
-              checkedSessionId === session.id &&
-              checked.has(person.id),
-            );
+            const isChecked = isAttending(person.id);
             const blocked = person.type === "medlem" && (person.balance ?? 0) <= 0;
 
             return (
@@ -841,13 +852,13 @@ export default function Home() {
         <ConfirmDialog
           title="Bekræft rettelse"
           message={
-            checkedSessionId === session?.id && checked.has(correctionPerson.id)
+            isAttending(correctionPerson.id)
               ? `Fjern det historiske fremmøde for ${correctionPerson.name} den ${displayDate(sessionDate)}?`
               : `Tilføj historisk fremmøde for ${correctionPerson.name} den ${displayDate(sessionDate)}?`
           }
-          confirmLabel={checkedSessionId === session?.id && checked.has(correctionPerson.id) ? "Fjern fremmøde" : "Tilføj fremmøde"}
+          confirmLabel={isAttending(correctionPerson.id) ? "Fjern fremmøde" : "Tilføj fremmøde"}
           busy={busyId === correctionPerson.id}
-          tone={checkedSessionId === session?.id && checked.has(correctionPerson.id) ? "danger" : "primary"}
+          tone={isAttending(correctionPerson.id) ? "danger" : "primary"}
           onClose={() => setCorrectionPerson(null)}
           onConfirm={() => void correctHistoricalAttendance(correctionPerson)}
         />
