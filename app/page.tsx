@@ -113,6 +113,7 @@ export default function Home() {
   const [session, setSession] = useState<TrainingSession | null>(null);
   const [people, setPeople] = useState<Person[]>([]);
   const [checked, setChecked] = useState<Set<string>>(new Set());
+  const [checkedSessionId, setCheckedSessionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -208,6 +209,7 @@ export default function Home() {
       payment_status: row.payment_status,
     })));
     setChecked(new Set((attendanceResult.data ?? []).map((row) => row.person_id)));
+    setCheckedSessionId(loadedSession?.id ?? null);
     setSession(loadedSession);
   }, [isPast, selectedClass, sessionDate]);
 
@@ -281,7 +283,7 @@ export default function Home() {
       return;
     }
 
-    const wasChecked = checked.has(person.id);
+    const wasChecked = checkedSessionId === activeSession.id && checked.has(person.id);
     const result = wasChecked
       ? await supabase.rpc("undo_attendance_for_session", {
           p_person_id: person.id,
@@ -415,7 +417,7 @@ export default function Home() {
     const result = await supabase.rpc("correct_historical_attendance", {
       p_person_id: person.id,
       p_session_id: session.id,
-      p_should_attend: !checked.has(person.id),
+      p_should_attend: !(checkedSessionId === session.id && checked.has(person.id)),
     });
 
     setBusyId(null);
@@ -456,6 +458,7 @@ export default function Home() {
     setSessionDate(moveDate(sessionDate, delta));
     setSession(null);
     setChecked(new Set());
+    setCheckedSessionId(null);
     setError("");
   }
 
@@ -568,12 +571,16 @@ export default function Home() {
         {session?.status !== "aflyst" && (
         <section className="mt-2 overflow-hidden rounded-2xl border border-[#d9e0da] bg-white shadow-sm">
           {sortedPeople.map((person) => {
-            const isChecked = checked.has(person.id);
+            const isChecked = Boolean(
+              session &&
+              checkedSessionId === session.id &&
+              checked.has(person.id),
+            );
             const blocked = person.type === "medlem" && (person.balance ?? 0) <= 0;
 
             return (
+              <div key={person.id}>
               <button
-                key={person.id}
                 onClick={() => correctionMode ? setCorrectionPerson(person) : void toggle(person)}
                 disabled={Boolean(busyId) || (!isEditable && !correctionMode)}
                 className={`grid min-h-16 w-full grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-3 border-b border-[#e8ece8] px-4 py-3 text-left ${blocked ? "bg-[#fff1ef]" : isChecked ? "bg-[#eef1ee]" : "bg-white"}`}
@@ -582,6 +589,17 @@ export default function Home() {
                 <span className="truncate text-lg font-bold">{person.name}</span>
                 <span className={`whitespace-nowrap text-base font-bold ${blocked ? "text-[#b42318]" : person.balance === 1 ? "text-[#c27600]" : "text-[#28755d]"}`}>{busyId === person.id ? "…" : status(person)}</span>
               </button>
+              {isEditable && person.type === "gæst" && (
+                <button
+                  type="button"
+                  disabled={Boolean(busyId)}
+                  onClick={() => setPaymentPerson(person)}
+                  className="min-h-11 w-full border-b border-[#e8ece8] bg-[#f7fbf9] px-4 text-right text-sm font-bold text-[#28755d] disabled:opacity-50"
+                >
+                  Konvertér til medlem · 10 klip for 375 kr.
+                </button>
+              )}
+              </div>
             );
           })}
           {sortedPeople.length === 0 && <p className="p-6 text-center text-sm font-semibold text-[#60756d]">Ingen deltagere på dette hold endnu.</p>}
@@ -693,13 +711,13 @@ export default function Home() {
         <ConfirmDialog
           title="Bekræft rettelse"
           message={
-            checked.has(correctionPerson.id)
+            checkedSessionId === session?.id && checked.has(correctionPerson.id)
               ? `Fjern det historiske fremmøde for ${correctionPerson.name} den ${displayDate(sessionDate)}?`
               : `Tilføj historisk fremmøde for ${correctionPerson.name} den ${displayDate(sessionDate)}?`
           }
-          confirmLabel={checked.has(correctionPerson.id) ? "Fjern fremmøde" : "Tilføj fremmøde"}
+          confirmLabel={checkedSessionId === session?.id && checked.has(correctionPerson.id) ? "Fjern fremmøde" : "Tilføj fremmøde"}
           busy={busyId === correctionPerson.id}
-          tone={checked.has(correctionPerson.id) ? "danger" : "primary"}
+          tone={checkedSessionId === session?.id && checked.has(correctionPerson.id) ? "danger" : "primary"}
           onClose={() => setCorrectionPerson(null)}
           onConfirm={() => void correctHistoricalAttendance(correctionPerson)}
         />
@@ -778,8 +796,10 @@ function PaymentDialog({ person, busy, onClose, onConfirm }: { person: Person; b
     <div className="fixed inset-0 z-30 flex items-end bg-black/35 p-3 sm:items-center sm:justify-center">
       <div className="w-full rounded-2xl bg-white p-5 text-[#18322b] shadow-xl sm:max-w-sm">
         <h2 className="text-xl font-black">{person.name}</h2>
-        <p className="mt-3 text-base font-bold text-[#b42318]">0 klip · betaling mangler</p>
-        <p className="mt-2 text-sm text-[#60756d]">Har personen betalt 375 kr.?</p>
+        <p className="mt-3 text-base font-bold text-[#b42318]">
+          {person.type === "gæst" ? "Konvertér gæst til medlem" : "0 klip · betaling mangler"}
+        </p>
+        <p className="mt-2 text-sm text-[#60756d]">Har personen betalt 375 kr. for 10 klip?</p>
         <button type="button" disabled={busy} onClick={() => void onConfirm(person)} className="mt-4 min-h-14 w-full rounded-xl bg-[#28755d] px-4 font-black text-white disabled:opacity-50">{busy ? "Gemmer…" : "Registrér betaling"}</button>
         <button type="button" disabled={busy} onClick={onClose} className="mt-2 min-h-12 w-full font-bold text-[#60756d]">Luk</button>
       </div>
