@@ -26,3 +26,8 @@ input {
 button {
   cursor: pointer;
 }
+
+/* Afkrydsede deltagere skal stadig stå tydeligt og ikke nedtones. */
+.opacity-45 {
+  opacity: 1 !important;
+}
