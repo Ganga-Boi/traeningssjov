@@ -334,13 +334,13 @@ export default function Home() {
 
     let personId = existing.data?.id as string | undefined;
     if (!personId) {
-      const personResult = await supabase.from("people").insert({
-        name: clean,
-        type: "gæst",
-        balance: null,
-        payment_status: "skal_betale",
-        privacy_notice_given_at: new Date().toISOString(),
-      }).select("id").single();
+      const activeSession = await ensureSession();
+      if (!activeSession) return "Træningen kunne ikke oprettes";
+
+      const personResult = await supabase.rpc("create_guest_for_session", {
+        p_name: clean,
+        p_session_id: activeSession.id,
+      });
 
       if (personResult.error) return personResult.error.message;
       personId = personResult.data.id;
