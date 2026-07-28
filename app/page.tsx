@@ -5,6 +5,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 const supabase = getSupabaseBrowserClient();
 
+// Skrivehandlinger, der er beskyttet af RLS, køres gennem sikre databasefunktioner.
 type Person = {
   id: string;
   name: string;
