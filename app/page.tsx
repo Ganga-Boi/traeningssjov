@@ -23,6 +23,15 @@ type TrainingClass = {
 
 type TrainingSession = { id: string; status: string };
 
+type SnapshotRow = {
+  person_id: string;
+  name: string;
+  person_type: "gæst" | "medlem";
+  payment_status: "ok" | "skal_betale" | "blokeret";
+  clip_count: number | null;
+  attended: boolean;
+};
+
 function localDate(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
@@ -63,29 +72,6 @@ function status(person: Person) {
   return `${person.balance} klip`;
 }
 
-function normalizedName(value: string) {
-  return value.trim().toLocaleLowerCase("da-DK");
-}
-
-function preferredPerson(existing: Person, candidate: Person) {
-  if (existing.type !== candidate.type) return existing.type === "medlem" ? existing : candidate;
-  if (existing.payment_status !== candidate.payment_status) {
-    if (existing.payment_status === "blokeret") return existing;
-    if (candidate.payment_status === "blokeret") return candidate;
-  }
-  return (candidate.balance ?? -2) > (existing.balance ?? -2) ? candidate : existing;
-}
-
-function uniquePeople(items: Person[]) {
-  const byName = new Map<string, Person>();
-  for (const person of items) {
-    const key = normalizedName(person.name);
-    const existing = byName.get(key);
-    byName.set(key, existing ? preferredPerson(existing, person) : person);
-  }
-  return [...byName.values()];
-}
-
 export default function Home() {
   const [classes, setClasses] = useState<TrainingClass[]>([]);
   const [classIndex, setClassIndex] = useState(0);
@@ -100,6 +86,7 @@ export default function Home() {
   const [paymentPerson, setPaymentPerson] = useState<Person | null>(null);
 
   const selectedClass = classes[classIndex] ?? null;
+  const isToday = sessionDate === localDate(new Date());
 
   const loadClasses = useCallback(async () => {
     const result = await supabase
@@ -118,8 +105,11 @@ export default function Home() {
     if (!selectedClass) return;
     setError("");
 
-    const [peopleResult, sessionResult] = await Promise.all([
-      supabase.from("people").select("id,name,type,balance,payment_status").order("name"),
+    const [snapshotResult, sessionResult] = await Promise.all([
+      supabase.rpc("get_class_roster_snapshot", {
+        p_class_id: selectedClass.id,
+        p_snapshot_date: sessionDate,
+      }),
       supabase
         .from("sessions")
         .select("id,status")
@@ -128,25 +118,19 @@ export default function Home() {
         .maybeSingle(),
     ]);
 
-    if (peopleResult.error) return setError(peopleResult.error.message);
+    if (snapshotResult.error) return setError(snapshotResult.error.message);
     if (sessionResult.error) return setError(sessionResult.error.message);
 
-    setPeople(uniquePeople((peopleResult.data ?? []) as Person[]));
-    const found = (sessionResult.data ?? null) as TrainingSession | null;
-    setSession(found);
-
-    if (!found) {
-      setChecked(new Set());
-      return;
-    }
-
-    const attendance = await supabase
-      .from("attendance")
-      .select("person_id")
-      .eq("session_id", found.id);
-
-    if (attendance.error) return setError(attendance.error.message);
-    setChecked(new Set((attendance.data ?? []).map((row) => row.person_id)));
+    const rows = (snapshotResult.data ?? []) as SnapshotRow[];
+    setPeople(rows.map((row) => ({
+      id: row.person_id,
+      name: row.name,
+      type: row.person_type,
+      balance: row.clip_count,
+      payment_status: row.payment_status,
+    })));
+    setChecked(new Set(rows.filter((row) => row.attended).map((row) => row.person_id)));
+    setSession((sessionResult.data ?? null) as TrainingSession | null);
   }, [selectedClass, sessionDate]);
 
   useEffect(() => { void loadClasses(); }, [loadClasses]);
@@ -154,9 +138,7 @@ export default function Home() {
 
   const sortedPeople = useMemo(() => [...people].sort((a, b) => {
     if (a.type !== b.type) return a.type === "gæst" ? -1 : 1;
-    const aBalance = a.balance ?? -2;
-    const bBalance = b.balance ?? -2;
-    return bBalance - aBalance || a.name.localeCompare(b.name, "da");
+    return a.name.localeCompare(b.name, "da");
   }), [people]);
 
   async function ensureSession() {
@@ -179,7 +161,7 @@ export default function Home() {
   }
 
   async function toggle(person: Person) {
-    if (busyId) return;
+    if (busyId || !isToday) return;
 
     if (person.type === "medlem" && (person.balance ?? 0) <= 0) {
       setPaymentPerson(person);
@@ -256,26 +238,43 @@ export default function Home() {
     setClassIndex(nextIndex);
     setSessionDate(moveDate(sessionDate, delta));
     setSession(null);
-    setChecked(new Set());
     setError("");
   }
 
   async function addGuest(name: string) {
+    if (!selectedClass) return "Intet hold valgt";
     const clean = name.trim();
     if (!clean) return "Navn mangler";
-    if (people.some((person) => normalizedName(person.name) === normalizedName(clean))) {
-      return "Personen står allerede på listen";
+
+    const existing = await supabase
+      .from("people")
+      .select("id")
+      .ilike("name", clean)
+      .maybeSingle();
+
+    if (existing.error) return existing.error.message;
+
+    let personId = existing.data?.id as string | undefined;
+    if (!personId) {
+      const personResult = await supabase.from("people").insert({
+        name: clean,
+        type: "gæst",
+        balance: null,
+        payment_status: "skal_betale",
+        privacy_notice_given_at: new Date().toISOString(),
+      }).select("id").single();
+
+      if (personResult.error) return personResult.error.message;
+      personId = personResult.data.id;
     }
 
-    const result = await supabase.from("people").insert({
-      name: clean,
-      type: "gæst",
-      balance: null,
-      payment_status: "skal_betale",
-      privacy_notice_given_at: new Date().toISOString(),
+    const membershipResult = await supabase.from("class_memberships").upsert({
+      class_id: selectedClass.id,
+      person_id: personId,
+      active: true,
     });
 
-    if (result.error) return result.error.message;
+    if (membershipResult.error) return membershipResult.error.message;
     await loadPage();
     return null;
   }
@@ -294,17 +293,16 @@ export default function Home() {
         <nav className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 rounded-2xl border border-[#d9e0da] bg-white p-4 shadow-sm">
           <button onClick={() => changeTraining(-1)} className="min-h-12 justify-self-start text-sm font-bold text-[#28755d]">← Forrige</button>
           <div className="text-center">
-            <h1 className="whitespace-nowrap text-xl font-black">
-              {weekday(sessionDate)} {time(selectedClass.start_time)}–{time(selectedClass.end_time)}
-            </h1>
+            <h1 className="whitespace-nowrap text-xl font-black">{weekday(sessionDate)} {time(selectedClass.start_time)}–{time(selectedClass.end_time)}</h1>
             <p className="mt-1 text-sm font-semibold text-[#60756d]">{displayDate(sessionDate)}</p>
           </div>
           <button onClick={() => changeTraining(1)} className="min-h-12 justify-self-end text-sm font-bold text-[#28755d]">Næste →</button>
         </nav>
 
+        {!isToday && <p className="mt-3 text-center text-sm font-semibold text-[#60756d]">Historik · kun visning</p>}
         {error && <div className="mt-4 rounded-xl bg-[#fee9e5] p-4 text-sm font-semibold text-[#8d342d]">{error}</div>}
 
-        <button onClick={() => setAddingGuest(true)} className="mt-5 min-h-12 px-2 text-base font-black text-[#28755d]">+ Gæst</button>
+        {isToday && <button onClick={() => setAddingGuest(true)} className="mt-5 min-h-12 px-2 text-base font-black text-[#28755d]">+ Gæst</button>}
 
         <section className="mt-2 overflow-hidden rounded-2xl border border-[#d9e0da] bg-white shadow-sm">
           {sortedPeople.map((person) => {
@@ -315,7 +313,7 @@ export default function Home() {
               <button
                 key={person.id}
                 onClick={() => void toggle(person)}
-                disabled={Boolean(busyId)}
+                disabled={Boolean(busyId) || !isToday}
                 className={`grid min-h-16 w-full grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-3 border-b border-[#e8ece8] px-4 py-3 text-left ${blocked ? "bg-[#fff1ef]" : isChecked ? "bg-[#eef1ee]" : "bg-white"}`}
               >
                 <span className={`flex h-7 w-7 items-center justify-center rounded-md border-2 text-base font-black ${isChecked ? "border-[#28755d] bg-[#28755d] text-white" : blocked ? "border-[#d0a155] bg-[#fff4df] text-[#8b5605]" : "border-[#aebdb5] text-transparent"}`}>{blocked ? "!" : "✓"}</span>
@@ -324,6 +322,7 @@ export default function Home() {
               </button>
             );
           })}
+          {sortedPeople.length === 0 && <p className="p-6 text-center text-sm font-semibold text-[#60756d]">Ingen deltagere på dette hold endnu.</p>}
         </section>
       </div>
 
