@@ -123,6 +123,10 @@ drop policy if exists "anon people" on public.people;
 drop policy if exists "anon can create sessions" on public.sessions;
 drop policy if exists "anon can read sessions" on public.sessions;
 drop policy if exists "anon sessions" on public.sessions;
+drop policy if exists "anon reads attendance" on public.attendance;
+drop policy if exists "anon reads active classes" on public.classes;
+drop policy if exists "anon reads person balances" on public.people;
+drop policy if exists "anon reads sessions" on public.sessions;
 
 revoke all privileges on table public.attendance from anon;
 revoke all privileges on table public.class_memberships from anon;
