@@ -140,7 +140,6 @@ export default function Home() {
   const [guestConversions, setGuestConversions] = useState<GuestConversion[]>([]);
   const [deactivatePerson, setDeactivatePerson] = useState<Person | null>(null);
   const [conversionToUndo, setConversionToUndo] = useState<GuestConversion | null>(null);
-  const [resetWarningOpen, setResetWarningOpen] = useState(false);
   const [cancellationAction, setCancellationAction] = useState<"cancel" | "restore" | null>(null);
   const [correctionWarningOpen, setCorrectionWarningOpen] = useState(false);
   const [correctionMode, setCorrectionMode] = useState(false);
@@ -423,39 +422,6 @@ export default function Home() {
 
     setConversionToUndo(null);
     await Promise.all([loadPage(), loadGuestConversions()]);
-  }
-
-  async function handleReset() {
-    setBusyId("reset");
-    setError("");
-
-    try {
-      const result = await supabase.rpc("reset_all_test_data", {
-        p_confirmation: "NULSTIL ALLE TESTDATA",
-      });
-
-      if (result.error) throw result.error;
-
-      loadRequest.current += 1;
-      setResetWarningOpen(false);
-      setSession(null);
-      setAttendance([]);
-      setPeople([]);
-      setInactiveMembers([]);
-      setGuestConversions([]);
-      setPaymentPerson(null);
-      setDeactivatePerson(null);
-      setConversionToUndo(null);
-      setPageLoading(true);
-
-      await Promise.all([loadPage(), loadInactiveMembers(), loadGuestConversions()]);
-    } catch (resetError) {
-      const message = errorMessage(resetError);
-      setError(message);
-      window.alert(`Nulstilling mislykkedes: ${message}`);
-    } finally {
-      setBusyId(null);
-    }
   }
 
   async function confirmDeactivateMember(person: Person) {
@@ -787,13 +753,6 @@ export default function Home() {
                   <p className="mt-2 text-sm text-[#60756d]">Ingen konverteringer kan fortrydes.</p>
                 )}
 
-                <button
-                  type="button"
-                  onClick={() => setResetWarningOpen(true)}
-                  className="mt-8 min-h-11 w-full rounded-lg border border-[#d6a7a2] px-3 text-sm font-black text-[#9b3028]"
-                >
-                  Nulstil alle testdata
-                </button>
               </div>
             )}
           </section>
@@ -871,16 +830,6 @@ export default function Home() {
           busy={busyId === conversionToUndo.payment_id}
           onClose={() => setConversionToUndo(null)}
           onConfirm={() => void undoGuestConversion(conversionToUndo)}
-        />
-      )}
-      {resetWarningOpen && (
-        <ConfirmDialog
-          title="Nulstil testdata"
-          message="Er du sikker på, at du vil nulstille alle testdata?"
-          confirmLabel="Nulstil alt"
-          busy={busyId === "reset"}
-          onClose={() => setResetWarningOpen(false)}
-          onConfirm={() => void handleReset()}
         />
       )}
     </main>
