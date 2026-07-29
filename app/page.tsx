@@ -565,13 +565,6 @@ export default function Home() {
       return "Gæsten blev oprettet uden et gyldigt person-id.";
     }
 
-    const membershipResult = await supabase.from("class_memberships").upsert({
-      class_id: selectedClass.id,
-      person_id: personResult.data.id,
-      active: true,
-    });
-
-    if (membershipResult.error) return membershipResult.error.message;
     await loadPage();
     return null;
   }
