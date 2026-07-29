@@ -1,0 +1,40 @@
+name: AI QA
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run evidence-based QA
+        uses: Ganga-Boi/ai-review-system@main
+        with:
+          project-name: Træningssjov
+          commands: '["npm run lint","npm run build"]'
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://build-placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: build-placeholder-key
+
+      - name: Upload Judge report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-qa-report
+          path: qa-output/
+          if-no-files-found: warn
