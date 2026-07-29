@@ -13,8 +13,9 @@ export async function reviewFiles(projectRoot, files) {
   const findings = [];
   const sqlDefinitions = new Set();
   const rpcCalls = [];
+  let anonResetAccess = null;
 
-  for (const absolutePath of files) {
+  for (const absolutePath of [...files].sort()) {
     const file = relative(projectRoot, absolutePath);
     const content = await readFile(absolutePath, "utf8");
 
@@ -42,18 +43,26 @@ export async function reviewFiles(projectRoot, files) {
         }
       }
 
-      for (const match of content.matchAll(/grant\s+execute[\s\S]{0,180}?reset[a-z0-9_]*[\s\S]{0,120}?to\s+([^;]+)/gi)) {
-        if (/\banon\b/i.test(match[1])) {
-          findings.push(finding(
-            "critical",
-            "sql.anon-reset",
-            file,
-            lineNumber(content, match.index),
-            match[0].replace(/\s+/g, " ").trim(),
-            "En offentlig klient kan potentielt nulstille data.",
-            "Fjern anon EXECUTE og flyt reset til en autentificeret admin-kanal.",
-          ));
+      let statementStart = 0;
+      for (const statement of content.split(";")) {
+        if (/\breset[a-z0-9_]*\b/i.test(statement)) {
+          const grantsAnon =
+            /\bgrant\s+execute\b/i.test(statement) &&
+            /\bto\b[\s\S]*\banon\b/i.test(statement);
+          const revokesAnon =
+            /\brevoke\b/i.test(statement) &&
+            /\bfrom\b[\s\S]*\banon\b/i.test(statement);
+
+          if (grantsAnon || revokesAnon) {
+            anonResetAccess = {
+              granted: grantsAnon,
+              file,
+              line: lineNumber(content, statementStart),
+              evidence: statement.replace(/\s+/g, " ").trim(),
+            };
+          }
         }
+        statementStart += statement.length + 1;
       }
 
       for (const match of content.matchAll(/create\s+policy[\s\S]{0,300}?\bto\s+anon[\s\S]{0,300}?\bfor\s+all[\s\S]{0,150}?using\s*\(\s*true\s*\)[\s\S]{0,150}?with\s+check\s*\(\s*true\s*\)/gi)) {
@@ -81,6 +90,18 @@ export async function reviewFiles(projectRoot, files) {
         "Flyt nøglen til servermiljøet og rotér den.",
       ));
     }
+  }
+
+  if (anonResetAccess?.granted) {
+    findings.push(finding(
+      "critical",
+      "sql.anon-reset",
+      anonResetAccess.file,
+      anonResetAccess.line,
+      anonResetAccess.evidence,
+      "En offentlig klient kan potentielt nulstille data.",
+      "Fjern anon EXECUTE og flyt reset til en autentificeret admin-kanal.",
+    ));
   }
 
   for (const call of rpcCalls) {
