@@ -23,11 +23,10 @@ jobs:
         run: npm ci
 
       - name: Run evidence-based QA
-        uses: Ganga-Boi/ai-review-system@main
-        with:
-          project-name: Træningssjov
-          commands: '["npm run lint","npm run build"]'
+        run: node .github/ai-review-system/action-runner.mjs
         env:
+          INPUT_PROJECT_NAME: Træningssjov
+          INPUT_COMMANDS: '["npm run lint","npm run build"]'
           NEXT_PUBLIC_SUPABASE_URL: https://build-placeholder.supabase.co
           NEXT_PUBLIC_SUPABASE_ANON_KEY: build-placeholder-key
 
