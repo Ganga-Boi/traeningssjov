@@ -280,9 +280,6 @@ export default function Home() {
 
   const sortedPeople = useMemo(() => [...people].sort((a, b) => {
     if (a.type !== b.type) return a.type === "gæst" ? -1 : 1;
-    if (a.type === "medlem" && b.type === "medlem" && a.balance !== b.balance) {
-      return (b.balance ?? 0) - (a.balance ?? 0);
-    }
     return a.name.localeCompare(b.name, "da");
   }), [people]);
 
