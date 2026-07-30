@@ -37,6 +37,12 @@ type GuestConversion = {
   paid_at: string;
 };
 
+type ActivityItem = {
+  id: string;
+  occurred_at: string;
+  text: string;
+};
+
 type SnapshotRow = {
   person_id: string;
   name: string;
@@ -138,6 +144,8 @@ export default function Home() {
   const [showMemberAdmin, setShowMemberAdmin] = useState(false);
   const [inactiveMembers, setInactiveMembers] = useState<InactiveMember[]>([]);
   const [guestConversions, setGuestConversions] = useState<GuestConversion[]>([]);
+  const [activityItems, setActivityItems] = useState<ActivityItem[]>([]);
+  const [activityLoading, setActivityLoading] = useState(false);
   const [deactivatePerson, setDeactivatePerson] = useState<Person | null>(null);
   const [conversionToUndo, setConversionToUndo] = useState<GuestConversion | null>(null);
   const [cancellationAction, setCancellationAction] = useState<"cancel" | "restore" | null>(null);
@@ -404,6 +412,27 @@ export default function Home() {
     setGuestConversions((result.data ?? []) as GuestConversion[]);
   }
 
+  async function loadActivityLog() {
+    if (!testMode) return;
+    setActivityLoading(true);
+
+    try {
+      const response = await fetch("/api/activity-log", { cache: "no-store" });
+      const data = await response.json() as { items?: ActivityItem[]; error?: string };
+
+      if (!response.ok) {
+        setError(data.error ?? "Aktivitetsloggen kunne ikke hentes.");
+        return;
+      }
+
+      setActivityItems(data.items ?? []);
+    } catch (activityError) {
+      setError(errorMessage(activityError));
+    } finally {
+      setActivityLoading(false);
+    }
+  }
+
   async function undoGuestConversion(conversion: GuestConversion) {
     setBusyId(conversion.payment_id);
     setError("");
@@ -517,6 +546,7 @@ export default function Home() {
     setShowMemberAdmin(false);
     setInactiveMembers([]);
     setGuestConversions([]);
+    setActivityItems([]);
 
     const nextIndex = (classIndex + direction + classes.length) % classes.length;
     const nextClass = classes[nextIndex];
@@ -705,7 +735,11 @@ export default function Home() {
               onClick={() => {
                 const next = !showMemberAdmin;
                 setShowMemberAdmin(next);
-                if (next) void Promise.all([loadInactiveMembers(), loadGuestConversions()]);
+                if (next) void Promise.all([
+                  loadInactiveMembers(),
+                  loadGuestConversions(),
+                  loadActivityLog(),
+                ]);
               }}
               className="min-h-11 text-sm font-bold text-[#60756d]"
             >
@@ -764,10 +798,44 @@ export default function Home() {
                   <p className="mt-2 text-sm text-[#60756d]">Ingen konverteringer kan fortrydes.</p>
                 )}
 
+                {testMode && (
+                  <>
+                    <div className="mt-6 flex items-center justify-between gap-3">
+                      <h2 className="font-black">Aktivitetslog</h2>
+                      <button
+                        type="button"
+                        disabled={activityLoading}
+                        onClick={() => void loadActivityLog()}
+                        className="min-h-10 text-sm font-bold text-[#28755d] disabled:opacity-50"
+                      >
+                        Opdatér
+                      </button>
+                    </div>
+                    {activityLoading && (
+                      <p className="mt-2 text-sm text-[#60756d]">Henter aktiviteter…</p>
+                    )}
+                    {!activityLoading && activityItems.map((item) => (
+                      <div key={item.id} className="mt-3 border-t border-[#e8ece8] pt-3">
+                        <p className="text-sm font-semibold leading-5">{item.text}</p>
+                        <p className="mt-1 text-xs text-[#60756d]">
+                          {new Intl.DateTimeFormat("da-DK", {
+                            dateStyle: "short",
+                            timeStyle: "short",
+                          }).format(new Date(item.occurred_at))}
+                        </p>
+                      </div>
+                    ))}
+                    {!activityLoading && activityItems.length === 0 && (
+                      <p className="mt-2 text-sm text-[#60756d]">Ingen aktiviteter registreret.</p>
+                    )}
+                  </>
+                )}
+
               </div>
             )}
           </section>
         )}
+
         {testMode && (
           <button
             type="button"
