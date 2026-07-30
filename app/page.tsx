@@ -129,6 +129,8 @@ function nextTraining(classes: TrainingClass[]): NextTraining | null {
 }
 
 export default function Home() {
+  const [authLoading, setAuthLoading] = useState(true);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
   const [classes, setClasses] = useState<TrainingClass[]>([]);
   const [classIndex, setClassIndex] = useState(0);
   const [sessionDate, setSessionDate] = useState(localDate(new Date()));
@@ -160,6 +162,20 @@ export default function Home() {
   const isPast = sessionDate < todayDate;
   const isEditable = !isPast;
   const testMode = process.env.NEXT_PUBLIC_TEST_MODE === "true";
+
+  useEffect(() => {
+    void supabase.auth.getSession().then(({ data }) => {
+      setUserEmail(data.session?.user.email ?? null);
+      setAuthLoading(false);
+    });
+
+    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setUserEmail(nextSession?.user.email ?? null);
+      setAuthLoading(false);
+    });
+
+    return () => data.subscription.unsubscribe();
+  }, []);
 
   const loadClasses = useCallback(async () => {
     const result = await supabase
@@ -261,16 +277,19 @@ export default function Home() {
   }, [isPast, selectedClass, sessionDate]);
 
   useEffect(() => {
+    if (!userEmail) return;
     const timer = window.setTimeout(() => void loadClasses(), 0);
     return () => window.clearTimeout(timer);
-  }, [loadClasses]);
+  }, [loadClasses, userEmail]);
 
   useEffect(() => {
+    if (!userEmail) return;
     const timer = window.setTimeout(() => void loadPage(), 0);
     return () => window.clearTimeout(timer);
-  }, [loadPage]);
+  }, [loadPage, userEmail]);
 
   useEffect(() => {
+    if (!userEmail) return;
     function refreshWhenVisible() {
       if (document.visibilityState === "visible") {
         void loadPage();
@@ -284,7 +303,7 @@ export default function Home() {
       window.removeEventListener("focus", refreshWhenVisible);
       document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
-  }, [loadPage]);
+  }, [loadPage, userEmail]);
 
   const sortedPeople = useMemo(() => [...people].sort((a, b) => {
     if (a.type !== b.type) return a.type === "gæst" ? -1 : 1;
@@ -617,6 +636,14 @@ export default function Home() {
     }
   }
 
+  if (authLoading) {
+    return <main className="flex min-h-screen items-center justify-center bg-[#f4f5f1]">Indlæser…</main>;
+  }
+
+  if (!userEmail) {
+    return <LoginScreen />;
+  }
+
   if (loading) {
     return <main className="flex min-h-screen items-center justify-center bg-[#f4f5f1]">Indlæser…</main>;
   }
@@ -628,6 +655,16 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-[#f4f5f1] px-3 py-5 text-[#18322b] sm:px-5 sm:py-8">
       <div className="mx-auto max-w-xl">
+        <div className="mb-2 flex items-center justify-between gap-3 px-1 text-xs text-[#60756d]">
+          <span className="truncate">{userEmail}</span>
+          <button
+            type="button"
+            onClick={() => void supabase.auth.signOut()}
+            className="min-h-9 font-bold text-[#28755d]"
+          >
+            Log ud
+          </button>
+        </div>
         <nav className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 rounded-2xl border border-[#d9e0da] bg-white p-4 shadow-sm">
           <button disabled={pageLoading || Boolean(busyId)} onClick={() => changeTraining(-1)} className="min-h-12 justify-self-start text-sm font-bold text-[#28755d] disabled:opacity-50">← Forrige</button>
           <div className="text-center">
@@ -920,6 +957,74 @@ export default function Home() {
           onConfirm={() => void undoGuestConversion(conversionToUndo)}
         />
       )}
+    </main>
+  );
+}
+
+function LoginScreen() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [loginError, setLoginError] = useState("");
+
+  async function signIn(event: FormEvent) {
+    event.preventDefault();
+    const cleanEmail = email.trim();
+    if (!cleanEmail || !password) return;
+
+    setBusy(true);
+    setLoginError("");
+    const result = await supabase.auth.signInWithPassword({
+      email: cleanEmail,
+      password,
+    });
+    setBusy(false);
+
+    if (result.error) {
+      setLoginError("E-mail eller kodeord er forkert.");
+    }
+  }
+
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-[#f4f5f1] px-4 text-[#18322b]">
+      <form onSubmit={signIn} className="w-full max-w-sm rounded-2xl border border-[#d9e0da] bg-white p-6 shadow-sm">
+        <h1 className="text-2xl font-black">Træningssjov</h1>
+        <p className="mt-1 text-sm text-[#60756d]">Log ind for at åbne træningsbogen.</p>
+
+        <label className="mt-5 block text-sm font-bold" htmlFor="login-email">E-mail</label>
+        <input
+          id="login-email"
+          type="email"
+          autoComplete="username"
+          required
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+          className="mt-2 min-h-12 w-full rounded-xl border border-[#b8cec4] px-3 outline-none focus:border-[#28755d]"
+        />
+
+        <label className="mt-4 block text-sm font-bold" htmlFor="login-password">Kodeord</label>
+        <input
+          id="login-password"
+          type="password"
+          autoComplete="current-password"
+          required
+          value={password}
+          onChange={(event) => setPassword(event.target.value)}
+          className="mt-2 min-h-12 w-full rounded-xl border border-[#b8cec4] px-3 outline-none focus:border-[#28755d]"
+        />
+
+        {loginError && (
+          <p className="mt-3 rounded-xl bg-[#fee9e5] p-3 text-sm font-semibold text-[#8d342d]">{loginError}</p>
+        )}
+
+        <button
+          type="submit"
+          disabled={busy || !email.trim() || !password}
+          className="mt-5 min-h-12 w-full rounded-xl bg-[#28755d] px-4 font-black text-white disabled:opacity-50"
+        >
+          {busy ? "Logger ind…" : "Log ind"}
+        </button>
+      </form>
     </main>
   );
 }
