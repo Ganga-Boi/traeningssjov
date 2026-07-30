@@ -572,7 +572,8 @@ export default function Home() {
 
   async function resetTestData() {
     if (!window.confirm("Er du sikker på, at du vil nulstille alle testdata?")) return;
-    const token = window.prompt("Indtast testkoden");
+    const savedToken = window.localStorage.getItem("traeningssjov-test-reset-token");
+    const token = savedToken ?? window.prompt("Indtast testkoden");
     if (!token) return;
 
     try {
@@ -584,10 +585,14 @@ export default function Home() {
       const data = await response.json() as { error?: string };
 
       if (!response.ok) {
+        if (response.status === 403) {
+          window.localStorage.removeItem("traeningssjov-test-reset-token");
+        }
         window.alert(data.error ?? "Test-reset fejlede.");
         return;
       }
 
+      window.localStorage.setItem("traeningssjov-test-reset-token", token);
       window.location.reload();
     } catch (resetError) {
       window.alert(errorMessage(resetError));
