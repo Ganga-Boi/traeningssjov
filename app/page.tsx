@@ -151,6 +151,7 @@ export default function Home() {
   const todayDate = localDate(new Date());
   const isPast = sessionDate < todayDate;
   const isEditable = !isPast;
+  const testMode = process.env.NEXT_PUBLIC_TEST_MODE === "true";
 
   const loadClasses = useCallback(async () => {
     const result = await supabase
@@ -569,6 +570,30 @@ export default function Home() {
     return null;
   }
 
+  async function resetTestData() {
+    if (!window.confirm("Er du sikker på, at du vil nulstille alle testdata?")) return;
+    const token = window.prompt("Indtast testkoden");
+    if (!token) return;
+
+    try {
+      const response = await fetch("/api/test-reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token }),
+      });
+      const data = await response.json() as { error?: string };
+
+      if (!response.ok) {
+        window.alert(data.error ?? "Test-reset fejlede.");
+        return;
+      }
+
+      window.location.reload();
+    } catch (resetError) {
+      window.alert(errorMessage(resetError));
+    }
+  }
+
   if (loading) {
     return <main className="flex min-h-screen items-center justify-center bg-[#f4f5f1]">Indlæser…</main>;
   }
@@ -749,6 +774,15 @@ export default function Home() {
               </div>
             )}
           </section>
+        )}
+        {testMode && (
+          <button
+            type="button"
+            onClick={() => void resetTestData()}
+            className="mt-8 min-h-11 rounded-lg border border-[#d6a7a2] px-3 text-sm font-bold text-[#9b3028]"
+          >
+            Nulstil testdata
+          </button>
         )}
       </div>
 
