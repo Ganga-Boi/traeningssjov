@@ -818,7 +818,7 @@ export default function Home() {
                       <div key={item.id} className="mt-3 border-t border-[#e8ece8] pt-3">
                         <p className="text-sm font-semibold leading-5">{item.text}</p>
                         <p className="mt-1 text-xs text-[#60756d]">
-                          {new Intl.DateTimeFormat("da-DK", {
+                          Registreret {new Intl.DateTimeFormat("da-DK", {
                             dateStyle: "short",
                             timeStyle: "short",
                           }).format(new Date(item.occurred_at))}
