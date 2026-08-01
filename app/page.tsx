@@ -146,6 +146,7 @@ export default function Home() {
   const [guestConversions, setGuestConversions] = useState<GuestConversion[]>([]);
   const [activityItems, setActivityItems] = useState<ActivityItem[]>([]);
   const [activityLoading, setActivityLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const [deactivatePerson, setDeactivatePerson] = useState<Person | null>(null);
   const [conversionToUndo, setConversionToUndo] = useState<GuestConversion | null>(null);
   const [cancellationAction, setCancellationAction] = useState<"cancel" | "restore" | null>(null);
@@ -290,6 +291,14 @@ export default function Home() {
     if (a.type !== b.type) return a.type === "gæst" ? -1 : 1;
     return a.name.localeCompare(b.name, "da");
   }), [people]);
+
+  const visiblePeople = useMemo(() => {
+    const query = searchQuery.trim().toLocaleLowerCase("da-DK");
+    if (!query) return sortedPeople;
+    return sortedPeople.filter((person) =>
+      person.name.toLocaleLowerCase("da-DK").includes(query),
+    );
+  }, [searchQuery, sortedPeople]);
 
   function isAttending(personId: string) {
     if (!session) return false;
@@ -547,6 +556,7 @@ export default function Home() {
     setInactiveMembers([]);
     setGuestConversions([]);
     setActivityItems([]);
+    setSearchQuery("");
 
     const nextIndex = (classIndex + direction + classes.length) % classes.length;
     const nextClass = classes[nextIndex];
@@ -633,6 +643,9 @@ export default function Home() {
           <div className="text-center">
             <h1 className="whitespace-nowrap text-xl font-black">{weekday(sessionDate)} {time(selectedClass.start_time)}–{time(selectedClass.end_time)}</h1>
             <p className="mt-1 text-sm font-semibold text-[#60756d]">{displayDate(sessionDate)}</p>
+            {!pageLoading && session?.status !== "aflyst" && (
+              <p className="mt-1 text-xs font-bold text-[#28755d]">{attendance.length} mødt</p>
+            )}
           </div>
           <button disabled={pageLoading || Boolean(busyId)} onClick={() => changeTraining(1)} className="min-h-12 justify-self-end text-sm font-bold text-[#28755d] disabled:opacity-50">Næste →</button>
         </nav>
@@ -694,9 +707,22 @@ export default function Home() {
           </div>
         )}
 
+        {!pageLoading && session?.status !== "aflyst" && sortedPeople.length > 8 && (
+          <label className="mt-4 block">
+            <span className="sr-only">Søg efter navn</span>
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Søg efter navn…"
+              className="min-h-12 w-full rounded-xl border border-[#bcc9c2] bg-white px-4 text-base shadow-sm outline-none focus:border-[#28755d]"
+            />
+          </label>
+        )}
+
         {!pageLoading && session?.status !== "aflyst" && (
         <section className="mt-2 overflow-hidden rounded-2xl border border-[#d9e0da] bg-white shadow-sm">
-          {sortedPeople.map((person) => {
+          {visiblePeople.map((person) => {
             const isChecked = isAttending(person.id);
             const blocked = person.type === "medlem" && (person.balance ?? 0) <= 0;
 
@@ -724,7 +750,11 @@ export default function Home() {
               </div>
             );
           })}
-          {sortedPeople.length === 0 && <p className="p-6 text-center text-sm font-semibold text-[#60756d]">Ingen deltagere på dette hold endnu.</p>}
+          {visiblePeople.length === 0 && (
+            <p className="p-6 text-center text-sm font-semibold text-[#60756d]">
+              {searchQuery.trim() ? "Ingen deltagere matcher søgningen." : "Ingen deltagere på dette hold endnu."}
+            </p>
+          )}
         </section>
         )}
 
