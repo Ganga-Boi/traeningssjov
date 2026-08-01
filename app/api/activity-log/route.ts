@@ -18,9 +18,12 @@ type PersonRow = { id: string; name: string };
 type SessionRow = { id: string; class_id: string; session_date: string };
 type ClassRow = { id: string; name: string };
 
-function joinNames(names: string[]) {
-  if (names.length < 2) return names[0] ?? "En deltager";
-  return `${names.slice(0, -1).join(", ")} og ${names.at(-1)}`;
+function formatSessionDate(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  return new Intl.DateTimeFormat("da-DK", {
+    dateStyle: "long",
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(year, month - 1, day)));
 }
 
 export async function GET() {
@@ -96,44 +99,25 @@ export async function GET() {
   const people = new Map((peopleResult.data as PersonRow[]).map((person) => [person.id, person.name]));
   const sessionMap = new Map(sessions.map((session) => [session.id, session]));
   const classes = new Map((classesResult.data as ClassRow[]).map((trainingClass) => [trainingClass.id, trainingClass.name]));
-  const used = new Set<number>();
   const items: Array<{ id: string; occurred_at: string; text: string }> = [];
 
   for (const event of events) {
-    if (used.has(event.id)) continue;
-
     const personName = event.person_id
       ? people.get(event.person_id) ?? String(event.details.name ?? "Ukendt person")
       : null;
     const session = event.session_id ? sessionMap.get(event.session_id) : null;
     const trainingClass = session ? classes.get(session.class_id) ?? "træningen" : "træningen";
     const date = session
-      ? session.session_date.split("-").reverse().join("-")
+      ? formatSessionDate(session.session_date)
       : null;
     let text: string;
 
-    if (event.action_type === "attendance_registered" && event.session_id) {
-      const matching = events.filter(
-        (candidate) =>
-          candidate.action_type === "attendance_registered" &&
-          candidate.session_id === event.session_id,
-      );
-      matching.forEach((candidate) => used.add(candidate.id));
-      const names = matching.map(
-        (candidate) =>
-          (candidate.person_id ? people.get(candidate.person_id) : null) ??
-          String(candidate.details.name ?? "Ukendt person"),
-      );
-      const balances = matching
-        .filter((candidate) => candidate.balance_after !== null)
-        .map((candidate) => {
-          const name = candidate.person_id ? people.get(candidate.person_id) ?? "Deltager" : "Deltager";
-          return `${name}: ${candidate.balance_before} → ${candidate.balance_after} klip`;
-        });
-      text = `${joinNames(names)} deltog på ${trainingClass} den ${date}.`;
-      if (balances.length > 0) text += ` ${balances.join(" · ")}.`;
+    if (event.action_type === "attendance_registered") {
+      text = `${personName} deltog på ${trainingClass} den ${date}.`;
+      if (event.balance_after !== null) {
+        text += ` Saldo: ${event.balance_before} → ${event.balance_after} klip.`;
+      }
     } else {
-      used.add(event.id);
       switch (event.action_type) {
         case "attendance_removed":
           text = `Fremmødet for ${personName} blev fjernet fra ${trainingClass} den ${date}.`;
@@ -163,6 +147,7 @@ export async function GET() {
           text = `${trainingClass} den ${date} blev aflyst.`;
           break;
         case "session_reopened":
+          if (event.details.old_status !== "aflyst") continue;
           text = `${trainingClass} den ${date} blev sat tilbage til planlagt.`;
           break;
         case "test_data_reset":
